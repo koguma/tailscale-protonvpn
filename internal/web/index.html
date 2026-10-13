@@ -1,0 +1,1863 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0c0c14">
+  <title>tailscale-protonvpn</title>
+  <link rel="icon"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 4 7v8c0 7.5 5.1 13.4 12 15 6.9-1.6 12-7.5 12-15V7z' fill='%236d4aff'/%3E%3Cpath d='M11 16h10m-4-4 4 4-4 4' stroke='%23fff' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --bg: #0c0c14;
+      --side: #16141c;
+      --card: #1c1b24;
+      --card-2: #24222e;
+      --hover: #292733;
+      --border: #2e2c3a;
+      --text: #ffffff;
+      --weak: #a7a4b5;
+      --hint: #6d697d;
+      --primary: #6d4aff;
+      --primary-hover: #7c5cff;
+      --primary-soft: rgba(109, 74, 255, .16);
+      --ok: #1ea885;
+      --ok-bright: #2ee6b0;
+      --bad: #dc3251;
+      --warn: #ff9900;
+      --dot: #2a2838;
+      --dot-srv: #3d3954;
+      --dot-hover: #6d4aff;
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text)
+    }
+
+    body {
+      font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden
+    }
+
+    button,
+    input {
+      font: inherit;
+      color: inherit
+    }
+
+    button {
+      cursor: pointer
+    }
+
+    .num {
+      font-variant-numeric: tabular-nums
+    }
+
+    svg.i {
+      width: 16px;
+      height: 16px;
+      flex: none;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round
+    }
+
+    .flag {
+      width: 24px;
+      height: 18px;
+      border-radius: 3px;
+      object-fit: cover;
+      flex: none;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, .08);
+      background: var(--card-2)
+    }
+
+    .flag.lg {
+      width: 36px;
+      height: 27px;
+      border-radius: 4px
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 400px 1fr;
+      grid-template-rows: auto 1fr;
+      grid-template-areas: "top main" "side main";
+      height: 100vh;
+      height: 100dvh
+    }
+
+    .top {
+      grid-area: top;
+      background: var(--side);
+      border-right: 1px solid var(--border)
+    }
+
+    .side {
+      grid-area: side
+    }
+
+    .main {
+      grid-area: main
+    }
+
+    /* ---------- sidebar ---------- */
+    .side {
+      background: var(--side);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      border-right: 1px solid var(--border)
+    }
+
+    .side-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 16px 12px
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: -.01em
+    }
+
+    .logo svg {
+      width: 26px;
+      height: 26px
+    }
+
+    .logo b {
+      font-weight: 700
+    }
+
+    .logo span {
+      font-weight: 500;
+      color: var(--weak)
+    }
+
+    #openSettings {
+      margin-left: auto;
+    }
+
+    .iconbtn {
+      background: none;
+      border: 0;
+      color: var(--weak);
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center
+    }
+
+    .iconbtn:hover {
+      background: var(--hover);
+      color: var(--text)
+    }
+
+    .iconbtn svg.i {
+      width: 19px;
+      height: 19px
+    }
+
+    .search {
+      margin: 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0 10px;
+      color: var(--hint)
+    }
+
+    .search:focus-within {
+      border-color: var(--primary)
+    }
+
+    .search input {
+      flex: 1;
+      background: none;
+      border: 0;
+      outline: none;
+      padding: 9px 0;
+      color: var(--text);
+      min-width: 0
+    }
+
+    .search input::placeholder {
+      color: var(--hint)
+    }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      padding: 12px 16px 4px;
+      overflow-x: auto;
+      scrollbar-width: none
+    }
+
+    .tab {
+      background: none;
+      border: 0;
+      color: var(--weak);
+      padding: 6px 9px;
+      font-size: 13.5px;
+      border-radius: 8px;
+      white-space: nowrap;
+      font-weight: 500;
+      display: flex;
+      gap: 6px;
+      align-items: center
+    }
+
+    .tab:hover {
+      background: var(--hover);
+      color: var(--text)
+    }
+
+    .tab[aria-selected=true] {
+      background: var(--primary-soft);
+      color: #b7a5ff
+    }
+
+    .list-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px 6px;
+      color: var(--hint);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .04em
+    }
+
+    .list-head button {
+      background: none;
+      border: 0;
+      color: var(--weak);
+      font-size: 12px;
+      text-transform: none;
+      letter-spacing: 0;
+      font-weight: 500;
+      padding: 2px 6px;
+      border-radius: 6px;
+      display: flex;
+      gap: 5px;
+      align-items: center
+    }
+
+    .list-head button:hover {
+      color: var(--text);
+      background: var(--hover)
+    }
+
+    .clist {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 8px 16px;
+      min-height: 0
+    }
+
+    .clist::-webkit-scrollbar {
+      width: 8px
+    }
+
+    .clist::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 8px
+    }
+
+    .crow {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 8px;
+      height: 48px;
+      border-radius: 8px;
+      cursor: pointer;
+      position: relative
+    }
+
+    .crow:hover,
+    .crow.open {
+      background: var(--hover)
+    }
+
+    .cname {
+      flex: 1;
+      min-width: 0;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis
+    }
+
+    .cname small {
+      color: var(--hint);
+      font-weight: 400;
+      margin-left: 6px
+    }
+
+    .cname .on {
+      color: var(--ok-bright);
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 6px
+    }
+
+    .feats {
+      display: flex;
+      gap: 6px;
+      color: var(--hint)
+    }
+
+    .feats svg.i {
+      width: 15px;
+      height: 15px
+    }
+
+    .chev {
+      color: var(--hint);
+      transition: transform .15s
+    }
+
+    .crow.open .chev {
+      transform: rotate(180deg)
+    }
+
+    .cbtn {
+      display: none;
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 5px 12px;
+      font-weight: 600;
+      font-size: 13px
+    }
+
+    .cbtn:hover {
+      border-color: var(--primary);
+      background: var(--primary)
+    }
+
+    .cbtn.dis {
+      background: transparent;
+      border-color: var(--bad);
+      color: var(--bad)
+    }
+
+    .cbtn.dis:hover {
+      background: var(--bad);
+      color: #fff
+    }
+
+    .crow:hover .cbtn,
+    .srow:hover .cbtn,
+    .cbtn.show {
+      display: inline-block
+    }
+
+    .crow:hover .feats {
+      display: none
+    }
+
+    @media (hover:none) {
+      .cbtn {
+        display: inline-block
+      }
+
+      .crow .feats {
+        display: none
+      }
+    }
+
+    .servers {
+      padding: 2px 0 8px 44px
+    }
+
+    .srow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 44px;
+      padding: 0 8px;
+      border-radius: 8px;
+      cursor: pointer
+    }
+
+    .srow:hover {
+      background: var(--hover)
+    }
+
+    .srow.cur {
+      background: rgba(30, 168, 133, .1)
+    }
+
+    .sname {
+      flex: 1;
+      min-width: 0
+    }
+
+    .sname b {
+      font-weight: 500;
+      display: block;
+      line-height: 1.2
+    }
+
+    .sname span {
+      color: var(--hint);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: block
+    }
+
+    .lat {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--weak);
+      font-size: 12px;
+      min-width: 56px;
+      justify-content: flex-end
+    }
+
+    .lat i {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--hint)
+    }
+
+    .lat.g i {
+      background: var(--ok)
+    }
+
+    .lat.m i {
+      background: var(--warn)
+    }
+
+    .lat.s i {
+      background: var(--bad)
+    }
+
+    .srow:hover .lat {
+      display: none
+    }
+
+    .more {
+      display: block;
+      margin: 6px auto;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--weak);
+      border-radius: 8px;
+      padding: 6px 12px
+    }
+
+    .empty {
+      color: var(--hint);
+      text-align: center;
+      padding: 40px 16px
+    }
+
+    /* ---------- main / map ---------- */
+    .main {
+      position: relative;
+      overflow: hidden;
+      min-height: 0;
+      background: radial-gradient(ellipse at 50% 120%, #17142a 0%, var(--bg) 60%)
+    }
+
+    .glow {
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 300px;
+      pointer-events: none;
+      transition: background .6s;
+      background: linear-gradient(180deg, rgba(220, 50, 81, .28), rgba(220, 50, 81, 0))
+    }
+
+    .st-connected .glow {
+      background: linear-gradient(180deg, rgba(30, 168, 133, .30), rgba(30, 168, 133, 0))
+    }
+
+    .st-connecting .glow {
+      background: linear-gradient(180deg, rgba(109, 74, 255, .30), rgba(109, 74, 255, 0))
+    }
+
+    .st-blocked .glow {
+      background: linear-gradient(180deg, rgba(255, 153, 0, .25), rgba(255, 153, 0, 0))
+    }
+
+    .status {
+      position: absolute;
+      top: 28px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      z-index: 2;
+      pointer-events: none
+    }
+
+    .st-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      color: var(--bad)
+    }
+
+    .st-label svg.i {
+      width: 20px;
+      height: 20px;
+      stroke-width: 2
+    }
+
+    .st-connected .st-label {
+      color: var(--ok-bright)
+    }
+
+    .st-connecting .st-label {
+      color: #b7a5ff
+    }
+
+    .st-blocked .st-label {
+      color: var(--warn)
+    }
+
+    .st-ip {
+      margin-top: 6px;
+      color: var(--weak);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 13.5px
+    }
+
+    .st-ip b {
+      color: var(--text);
+      font-weight: 600
+    }
+
+    .st-ip .flag {
+      width: 20px;
+      height: 15px
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%
+    }
+
+    #map path.land {
+      stroke: var(--dot);
+      stroke-width: 5.5;
+      stroke-linecap: round;
+      fill: none
+    }
+
+    #map path.srv {
+      stroke: var(--dot-srv);
+      stroke-width: 5.5;
+      stroke-linecap: round;
+      fill: none;
+      transition: stroke .15s
+    }
+
+    #map path.srv.hov,
+    #map path.srv.sel {
+      stroke: var(--dot-hover)
+    }
+
+    #map path.srv.cur.hov {
+      stroke: var(--ok-bright)
+    }
+
+    #map path.srv.cur {
+      stroke: var(--ok)
+    }
+
+    #map path.srv.home {
+      stroke: #5b5770
+    }
+
+    .pin {
+      pointer-events: none
+    }
+
+    .pin .halo {
+      animation: pulse 2s ease-out infinite;
+      transform-box: fill-box;
+      transform-origin: center
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(.4);
+        opacity: .9
+      }
+
+      100% {
+        transform: scale(2.4);
+        opacity: 0
+      }
+    }
+
+    .arc {
+      fill: none;
+      stroke: url(#arcGrad);
+      stroke-width: 2.2;
+      stroke-dasharray: 6 6;
+      animation: dash 1.2s linear infinite
+    }
+
+    @keyframes dash {
+      to {
+        stroke-dashoffset: -12
+      }
+    }
+
+    .tip {
+      position: absolute;
+      z-index: 3;
+      pointer-events: none;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 12.5px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      white-space: nowrap;
+      transform: translate(-50%, -130%);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .4)
+    }
+
+    .tip .flag {
+      width: 18px;
+      height: 13px
+    }
+
+    /* connection card */
+    .conn {
+      position: absolute;
+      left: 50%;
+      bottom: 28px;
+      transform: translateX(-50%);
+      width: min(560px, calc(100% - 32px));
+      z-index: 2;
+      background: rgba(28, 27, 36, .88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, .45)
+    }
+
+    .conn-top {
+      display: flex;
+      align-items: center;
+      gap: 14px
+    }
+
+    .conn-title {
+      flex: 1;
+      min-width: 0
+    }
+
+    .conn-title b {
+      display: block;
+      font-size: 17px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis
+    }
+
+    .conn-title span {
+      color: var(--weak);
+      font-size: 13px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 99px;
+      background: var(--card-2);
+      color: var(--weak);
+      border: 1px solid var(--border)
+    }
+
+    .pill.ok {
+      color: var(--ok-bright);
+      border-color: rgba(30, 168, 133, .4)
+    }
+
+    .pill.btnlike {
+      cursor: pointer
+    }
+
+    .pill.btnlike:hover {
+      border-color: var(--primary);
+      color: var(--text)
+    }
+
+    .conn-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-top: 14px
+    }
+
+    .cs {
+      background: var(--card-2);
+      border-radius: 10px;
+      padding: 8px 10px;
+      min-width: 0
+    }
+
+    .cs span {
+      display: block;
+      font-size: 11.5px;
+      color: var(--hint)
+    }
+
+    .cs b {
+      display: block;
+      font-weight: 600;
+      font-size: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis
+    }
+
+    .conn-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px
+    }
+
+    .btn {
+      flex: 1;
+      border: 0;
+      border-radius: 10px;
+      padding: 11px 16px;
+      font-weight: 600;
+      font-size: 14.5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px
+    }
+
+    .btn.primary {
+      background: var(--primary);
+      color: #fff
+    }
+
+    .btn.primary:hover {
+      background: var(--primary-hover)
+    }
+
+    .btn.secondary {
+      background: var(--card-2);
+      color: var(--text);
+      border: 1px solid var(--border)
+    }
+
+    .btn.secondary:hover {
+      background: var(--hover)
+    }
+
+    .btn.danger {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border)
+    }
+
+    .btn.danger:hover {
+      border-color: var(--bad);
+      color: var(--bad)
+    }
+
+    .btn:disabled {
+      opacity: .6;
+      cursor: default
+    }
+
+    .btn svg.i {
+      width: 17px;
+      height: 17px
+    }
+
+    .alert {
+      margin-top: 12px;
+      padding: 9px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start
+    }
+
+    .alert.bad {
+      background: rgba(220, 50, 81, .14);
+      color: #ff8095
+    }
+
+    .alert.warn {
+      background: rgba(255, 153, 0, .12);
+      color: #ffc266
+    }
+
+    .alert svg.i {
+      margin-top: 1px
+    }
+
+    /* ---------- settings drawer ---------- */
+    .scrim {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .5);
+      z-index: 10;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s
+    }
+
+    .scrim.open {
+      opacity: 1;
+      pointer-events: auto
+    }
+
+    .drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: min(440px, 100%);
+      background: var(--side);
+      border-left: 1px solid var(--border);
+      z-index: 11;
+      transform: translateX(100%);
+      transition: transform .25s ease;
+      display: flex;
+      flex-direction: column
+    }
+
+    .drawer.open {
+      transform: none
+    }
+
+    .drawer-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 16px 8px
+    }
+
+    .drawer-head h2 {
+      margin: 0;
+      font-size: 18px;
+      flex: 1
+    }
+
+    .drawer-body {
+      overflow-y: auto;
+      padding: 0 16px 32px;
+      flex: 1
+    }
+
+    .sect {
+      margin-top: 18px
+    }
+
+    .sect h3 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--hint);
+      text-transform: uppercase;
+      letter-spacing: .05em
+    }
+
+    .sbox {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px
+    }
+
+    .opt {
+      display: flex;
+      gap: 14px;
+      padding: 14px;
+      border-top: 1px solid var(--border)
+    }
+
+    .opt:first-child {
+      border-top: 0
+    }
+
+    .opt-txt {
+      flex: 1
+    }
+
+    .opt-txt b {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 2px
+    }
+
+    .opt-txt span {
+      color: var(--weak);
+      font-size: 13px
+    }
+
+    .switch {
+      position: relative;
+      width: 42px;
+      height: 24px;
+      flex: none;
+      margin-top: 2px
+    }
+
+    .switch input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      margin: 0;
+      cursor: pointer;
+      z-index: 1
+    }
+
+    .switch span {
+      position: absolute;
+      inset: 0;
+      background: #3a3847;
+      border-radius: 99px;
+      transition: .2s
+    }
+
+    .switch span::before {
+      content: "";
+      position: absolute;
+      left: 3px;
+      top: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      transition: .2s
+    }
+
+    .switch input:checked+span {
+      background: var(--primary)
+    }
+
+    .switch input:checked+span::before {
+      transform: translateX(18px)
+    }
+
+    .switch input:focus-visible+span {
+      box-shadow: 0 0 0 3px var(--primary-soft)
+    }
+
+    .pfrow {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap
+    }
+
+    .field {
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      outline: none;
+      color: var(--text);
+      min-width: 0
+    }
+
+    .field:focus {
+      border-color: var(--primary)
+    }
+
+    .pfrow .field {
+      flex: 1 1 140px
+    }
+
+    .pfrow .field.port {
+      flex: 0 1 100px
+    }
+
+    .sbtn {
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-weight: 600;
+      color: var(--text)
+    }
+
+    .sbtn:hover {
+      border-color: var(--primary)
+    }
+
+    .sbtn.primary {
+      background: var(--primary);
+      border-color: var(--primary)
+    }
+
+    .pfport {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-top: 10px
+    }
+
+    .pfport b {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -.02em
+    }
+
+    .pfport span {
+      color: var(--hint);
+      font-size: 12.5px
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 6px 14px;
+      padding: 14px;
+      font-size: 13.5px
+    }
+
+    .kv dt {
+      color: var(--hint)
+    }
+
+    .kv dd {
+      margin: 0;
+      word-break: break-word
+    }
+
+    textarea.field {
+      width: 100%;
+      min-height: 150px;
+      font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      resize: vertical
+    }
+
+    ol.help {
+      color: var(--weak);
+      font-size: 13px;
+      padding-left: 18px;
+      margin: 0 0 10px
+    }
+
+    ol.help a {
+      color: #b7a5ff
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translate(-50%, 20px);
+      background: #fff;
+      color: #16141c;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-weight: 500;
+      opacity: 0;
+      transition: .25s;
+      pointer-events: none;
+      z-index: 20;
+      max-width: calc(100% - 32px)
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translate(-50%, 0)
+    }
+
+    .disclaimer {
+      margin: 0;
+      padding: 0 14px 14px;
+      color: var(--hint);
+      font-size: 12px;
+    }
+
+    .hidden {
+      display: none !important
+    }
+
+    /* ---------- mobile ---------- */
+    @media (max-width:900px) {
+      body {
+        overflow: auto
+      }
+
+      .app {
+        display: flex;
+        flex-direction: column;
+        height: auto;
+        min-height: 100dvh
+      }
+
+      .top {
+        order: 0;
+        border-right: 0
+      }
+
+      .main {
+        order: 1;
+        height: auto;
+        min-height: 0;
+        padding: 64px 0 16px;
+        overflow: visible
+      }
+
+      .side {
+        order: 2
+      }
+
+      #map {
+        position: relative;
+        height: 230px;
+        inset: auto
+      }
+
+      .status {
+        top: 8px
+      }
+
+      .btn {
+        font-size: 14px;
+        padding: 11px 10px;
+        white-space: nowrap
+      }
+
+      .conn {
+        position: relative;
+        left: auto;
+        bottom: auto;
+        transform: none;
+        margin: 0 16px;
+        width: auto
+      }
+
+      .conn-stats {
+        grid-template-columns: repeat(2, 1fr)
+      }
+
+      .side {
+        border-right: 0;
+        border-top: 1px solid var(--border)
+      }
+
+      .clist {
+        overflow: visible
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-lock-open" viewBox="0 0 24 24">
+        <rect x="4" y="11" width="16" height="10" rx="2" />
+        <path d="M8 11V7a4 4 0 0 1 7.5-2" />
+      </symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24">
+        <rect x="4" y="11" width="16" height="10" rx="2" />
+        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+      </symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="3" />
+        <path
+          d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+      </symbol>
+      <symbol id="i-search" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-3.5-3.5" />
+      </symbol>
+      <symbol id="i-chev" viewBox="0 0 24 24">
+        <path d="m6 9 6 6 6-6" />
+      </symbol>
+      <symbol id="i-p2p" viewBox="0 0 24 24">
+        <path d="M7 4 3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7" />
+      </symbol>
+      <symbol id="i-tor" viewBox="0 0 24 24">
+        <circle cx="12" cy="13" r="8" />
+        <circle cx="12" cy="13" r="5" />
+        <circle cx="12" cy="13" r="2" />
+        <path d="M12 5c0-1.5 1-2.5 2.5-3" />
+      </symbol>
+      <symbol id="i-play" viewBox="0 0 24 24">
+        <rect x="3" y="5" width="18" height="14" rx="3" />
+        <path d="m10 9 5 3-5 3z" />
+      </symbol>
+      <symbol id="i-sc" viewBox="0 0 24 24">
+        <path d="M12 22s8-3.6 8-10V5l-8-3-8 3v7c0 6.4 8 10 8 10z" />
+        <path d="M12 17s4-1.8 4-5V8.5L12 7l-4 1.5V12c0 3.2 4 5 4 5z" />
+      </symbol>
+      <symbol id="i-bolt" viewBox="0 0 24 24">
+        <path d="M13 2 4 14h7l-1 8 9-12h-7z" />
+      </symbol>
+      <symbol id="i-power" viewBox="0 0 24 24">
+        <path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0" />
+      </symbol>
+      <symbol id="i-x" viewBox="0 0 24 24">
+        <path d="M6 6l12 12M18 6 6 18" />
+      </symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24">
+        <rect x="9" y="9" width="12" height="12" rx="2" />
+        <path d="M5 15V5a2 2 0 0 1 2-2h8" />
+      </symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v6M12 16.5v.5" />
+      </symbol>
+      <symbol id="i-gauge" viewBox="0 0 24 24">
+        <path d="M4 18a9 9 0 1 1 16 0" />
+        <path d="m12 14 4-5" />
+      </symbol>
+    </defs>
+  </svg>
+
+  <div class="app" id="app">
+    <header class="top side-head">
+      <div class="logo">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <defs>
+            <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#8a6eff" />
+              <stop offset="1" stop-color="#5236e0" />
+            </linearGradient>
+          </defs>
+          <path d="M16 2 4 7v8c0 7.5 5.1 13.4 12 15 6.9-1.6 12-7.5 12-15V7z" fill="url(#lg)" />
+          <path d="M11 16h10m-4-4 4 4-4 4" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"
+            stroke-linejoin="round" />
+        </svg>
+        <span><b>tailscale</b><span>-protonvpn</span></span>
+      </div>
+      <button class="iconbtn" id="openSettings" aria-label="Settings" title="Settings"><svg class="i">
+          <use href="#i-gear" />
+        </svg></button>
+    </header>
+    <aside class="side">
+      <label class="search"><svg class="i">
+          <use href="#i-search" />
+        </svg><input id="q" type="search" placeholder="Search countries, cities or servers" aria-label="Search"></label>
+      <div class="tabs" role="tablist" id="tabs">
+        <button class="tab" role="tab" data-t="all" aria-selected="true">All</button>
+        <button class="tab" role="tab" data-t="secureCore" aria-selected="false">Secure Core</button>
+        <button class="tab" role="tab" data-t="p2p" aria-selected="false">P2P</button>
+        <button class="tab" role="tab" data-t="streaming" aria-selected="false">Streaming</button>
+        <button class="tab" role="tab" data-t="tor" aria-selected="false">Tor</button>
+      </div>
+      <div class="list-head"><span id="listTitle">All countries</span><button id="measureAll"
+          title="Measure latency to each country"><svg class="i">
+            <use href="#i-gauge" />
+          </svg>Measure</button></div>
+      <div class="clist" id="clist" role="list"></div>
+    </aside>
+
+    <main class="main st-off" id="main">
+      <div class="glow"></div>
+      <div class="status" aria-live="polite">
+        <div class="st-label"><svg class="i">
+            <use id="stIcon" href="#i-lock-open" />
+          </svg><span id="stLabel">UNPROTECTED</span></div>
+        <div class="st-ip" id="stIP"></div>
+      </div>
+      <svg id="map" preserveAspectRatio="xMidYMid meet" aria-label="World map"></svg>
+      <div class="tip hidden" id="tip"></div>
+
+      <section class="conn" id="conn">
+        <div class="conn-top">
+          <img class="flag lg" id="cFlag" alt="" src="data:,">
+          <div class="conn-title">
+            <b id="cTitle">Not connected</b>
+            <span id="cSub"></span>
+          </div>
+        </div>
+        <div class="conn-stats" id="cStats">
+          <div class="cs"><span>Download</span><b class="num" id="csDown">—</b></div>
+          <div class="cs"><span>Upload</span><b class="num" id="csUp">—</b></div>
+          <div class="cs"><span>Session</span><b class="num" id="csTime">—</b></div>
+          <div class="cs"><span>Forwarded port</span><b class="num" id="csPort">—</b></div>
+        </div>
+        <div id="alerts"></div>
+        <div class="conn-actions">
+          <button class="btn primary" id="quick"><svg class="i">
+              <use href="#i-bolt" />
+            </svg><span>Quick Connect</span></button>
+          <button class="btn danger hidden" id="disconnect"><svg class="i">
+              <use href="#i-power" />
+            </svg><span>Disconnect</span></button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="scrim" id="scrim"></div>
+  <aside class="drawer" id="drawer" aria-label="Settings" aria-hidden="true">
+    <div class="drawer-head">
+      <h2>Settings</h2><button class="iconbtn" id="closeSettings" aria-label="Close"><svg class="i">
+          <use href="#i-x" />
+        </svg></button>
+    </div>
+    <div class="drawer-body">
+      <div class="sect">
+        <h3>Features</h3>
+        <div class="sbox">
+          <div class="opt">
+            <div class="opt-txt"><b>Kill switch</b><span>Blocks exit-node traffic if the VPN connection drops, so it
+                never leaves from this server's real IP.</span></div>
+            <label class="switch"><input type="checkbox" id="killSwitch" aria-label="Kill switch"><span></span></label>
+          </div>
+          <div class="opt">
+            <div class="opt-txt">
+              <b>Port forwarding</b><span>Opens a public port on P2P servers via NAT-PMP. Incoming connections reach
+                this machine, or a tailnet device you choose.</span>
+              <div id="pfBox">
+                <div class="pfport"><b class="num" id="pfPort">—</b><span id="pfInfo"></span><button
+                    class="iconbtn hidden" id="pfCopy" title="Copy port" aria-label="Copy port"><svg class="i">
+                      <use href="#i-copy" />
+                    </svg></button></div>
+                <div class="pfrow">
+                  <input class="field" id="pfTarget" placeholder="Forward to: this machine" aria-label="Forward to IP">
+                  <input class="field port" id="pfTargetPort" type="number" min="0" max="65535" placeholder="Same port"
+                    aria-label="Forward to port">
+                  <button class="sbtn" id="pfSave">Save</button>
+                </div>
+              </div>
+            </div>
+            <label class="switch"><input type="checkbox" id="portForward"
+                aria-label="Port forwarding"><span></span></label>
+          </div>
+          <div class="opt">
+            <div class="opt-txt"><b>DNS through VPN</b><span>Resolve exit-node clients' DNS lookups through the tunnel
+                instead of from this server's IP.</span></div>
+            <label class="switch"><input type="checkbox" id="dnsViaVPN"
+                aria-label="DNS through VPN"><span></span></label>
+          </div>
+        </div>
+      </div>
+
+      <div class="sect">
+        <h3>WireGuard key</h3>
+        <div class="sbox">
+          <div id="keySet">
+            <dl class="kv">
+              <dt>Name</dt>
+              <dd id="kLabel"></dd>
+              <dt>Address</dt>
+              <dd id="kAddr" class="num"></dd>
+              <dt>NAT-PMP</dt>
+              <dd id="kPmp"></dd>
+            </dl>
+            <div class="opt" style="gap:8px"><button class="sbtn" id="kReplace">Replace key</button><button class="sbtn"
+                id="kRemove">Remove</button></div>
+          </div>
+          <div id="keyForm" style="padding:14px">
+            <ol class="help">
+              <li>Go to <a href="https://account.protonvpn.com/downloads" target="_blank"
+                  rel="noopener">account.protonvpn.com → Downloads</a> → WireGuard configuration.</li>
+              <li>Choose <b>Linux</b>, turn on <b>NAT-PMP (Port Forwarding)</b>, pick any server, create.</li>
+              <li>Paste the file here. One key works with every server.</li>
+            </ol>
+            <textarea class="field" id="kText" spellcheck="false"
+              placeholder="[Interface]&#10;PrivateKey = …&#10;Address = 10.2.0.2/32"></textarea>
+            <div style="display:flex;gap:8px;margin-top:10px"><button class="sbtn primary" id="kSave">Save
+                key</button><button class="sbtn" id="kCancel">Cancel</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sect">
+        <h3>About</h3>
+        <div class="sbox">
+          <dl class="kv">
+            <dt>Exit node</dt>
+            <dd id="aHost"></dd>
+            <dt>Real IP</dt>
+            <dd id="aHostIP" class="num"></dd>
+            <dt>Server list</dt>
+            <dd><span id="aCat"></span> · <button class="sbtn" style="padding:2px 8px;font-size:12px"
+                id="refreshCat">Refresh</button></dd>
+            <dt>Signed in</dt>
+            <dd id="aUser"></dd>
+            <dt>Version</dt>
+            <dd id="aVer"></dd>
+          </dl>
+          <p class="disclaimer">Independent open-source project; not affiliated with Proton AG or Tailscale Inc.</p>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="map.js"></script>
+  <script>
+    "use strict";
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const ico = (n, cls = "i") => `<svg class="${cls}"><use href="#i-${n}"/></svg>`;
+    const flagSrc = cc => cc && /^[a-z]{2}$/i.test(cc) ? `flags/${cc.toLowerCase()}.svg` : "data:,";
+    const flagImg = (cc, cls = "flag") => `<img class="${cls}" src="${flagSrc(cc)}" alt="" loading="lazy">`;
+
+    let S = null, servers = [], lat = {}, tab = "all", openCC = null, limits = {}, editingKey = false, busy = false;
+    let lastBytes = null, rates = { down: 0, up: 0 };
+
+    async function api(path, opts = {}) {
+      const r = await fetch(path, { ...opts, headers: { "Content-Type": "application/json", "X-Tailscale-Protonvpn": "1", ...(opts.headers || {}) } });
+      const t = await r.text(); let j = null; try { j = JSON.parse(t) } catch { }
+      if (!r.ok) throw new Error((j && j.error) || t || r.statusText);
+      return j;
+    }
+    const post = (p, b) => api(p, { method: "POST", body: JSON.stringify(b || {}) });
+    let toastT;
+    function toast(m) { const t = $("toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 3200); }
+    function bytes(n, rate) { const u = ["B", "KB", "MB", "GB", "TB"]; let i = 0; n = n || 0; while (n >= 1024 && i < 4) { n /= 1024; i++ } return (n >= 100 || i === 0 ? n.toFixed(0) : n.toFixed(1)) + " " + u[i] + (rate ? "/s" : ""); }
+    // Server time minus browser time, so durations don't drift with clock skew.
+    let clockOffset = 0;
+    const serverNow = () => Date.now() + clockOffset;
+    function dur(ts) { if (!ts || ts.startsWith("0001")) return "—"; let s = Math.max(0, Math.floor((serverNow() - Date.parse(ts)) / 1000)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); s %= 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0"); }
+    function ago(ts) { if (!ts || ts.startsWith("0001")) return "never"; const s = (serverNow() - Date.parse(ts)) / 1000; return s < 60 ? Math.floor(s) + "s ago" : s < 3600 ? Math.floor(s / 60) + "m ago" : Math.floor(s / 3600) + "h ago"; }
+    const latClass = l => l == null ? "" : l < 60 ? "g" : l < 150 ? "m" : "s";
+
+    /* ---------------- filtering ---------------- */
+    function tabFilter(s) {
+      if (tab === "secureCore") return s.secureCore;
+      if (s.secureCore) return false;
+      if (tab === "all") return !s.tor;
+      return !!s[tab];
+    }
+    function visibleServers() {
+      const q = $("q").value.trim().toLowerCase();
+      return servers.filter(s => tabFilter(s) && (!q || `${s.name} ${s.city} ${s.country} ${s.hostname} ${s.cc}`.toLowerCase().includes(q)));
+    }
+    function groups(list) {
+      const m = new Map();
+      for (const s of list) { if (!m.has(s.cc)) m.set(s.cc, { cc: s.cc, country: s.country, servers: [] }); m.get(s.cc).servers.push(s); }
+      return [...m.values()].sort((a, b) => a.country.localeCompare(b.country));
+    }
+    const bestLat = g => { let b = null; for (const s of g.servers) { const l = lat[s.id]; if (l != null && (b == null || l < b)) b = l; } return b; };
+
+    /* ---------------- country list ---------------- */
+    function renderList() {
+      const list = visibleServers(), gs = groups(list), q = $("q").value.trim();
+      const cur = S && S.state.enabled && S.state.server ? S.state.server : null;
+      const titles = { all: "All countries", secureCore: "Secure Core countries", p2p: "P2P countries", streaming: "Streaming countries", tor: "Tor countries" };
+      $("listTitle").textContent = `${titles[tab]} (${gs.length})`;
+      let h = "";
+      for (const g of gs) {
+        const open = openCC === g.cc || (q && gs.length <= 3);
+        const isCur = cur && cur.cc === g.cc;
+        const f = { p2p: g.servers.some(s => s.p2p), tor: g.servers.some(s => s.tor), streaming: g.servers.some(s => s.streaming) };
+        const bl = bestLat(g);
+        h += `<div class="crow${open ? " open" : ""}" data-cc="${esc(g.cc)}" role="listitem" tabindex="0">
+      ${flagImg(g.cc)}
+      <div class="cname">${esc(g.country)}${isCur ? '<span class="on">● Connected</span>' : `<small>${g.servers.length}</small>`}</div>
+      ${bl != null ? `<span class="lat ${latClass(bl)} num"><i></i>${bl.toFixed(0)} ms</span>` : ""}
+      <span class="feats">${f.p2p ? ico("p2p") : ""}${f.streaming ? ico("play") : ""}${f.tor ? ico("tor") : ""}</span>
+      ${isCur ? `<button class="cbtn dis" data-act="disconnect">Disconnect</button>` : `<button class="cbtn" data-act="country" data-cc="${esc(g.cc)}">Connect</button>`}
+      <svg class="i chev"><use href="#i-chev"/></svg>
+    </div>`;
+        if (open) {
+          let ss = [...g.servers];
+          if (ss.some(s => lat[s.id] != null)) ss.sort((a, b) => (lat[a.id] ?? 1e9) - (lat[b.id] ?? 1e9));
+          const lim = limits[g.cc] || 40;
+          h += `<div class="servers">`;
+          for (const s of ss.slice(0, lim)) {
+            const isS = cur && cur.id === s.id, l = lat[s.id];
+            h += `<div class="srow${isS ? " cur" : ""}" data-id="${esc(s.id)}">
+          <div class="sname"><b>${esc(s.name)}</b><span>${esc(s.city || s.country)}${s.secureCore ? " · via " + esc(s.name.split("-")[0]) : ""}</span></div>
+          <span class="feats">${s.p2p ? ico("p2p") : ""}${s.streaming ? ico("play") : ""}${s.tor ? ico("tor") : ""}</span>
+          <span class="lat ${latClass(l)} num">${l != null ? `<i></i>${l.toFixed(0)} ms` : ""}</span>
+          ${isS ? `<button class="cbtn dis show" data-act="disconnect">Disconnect</button>` : `<button class="cbtn" data-act="server" data-id="${esc(s.id)}">Connect</button>`}
+        </div>`;
+          }
+          if (ss.length > lim) h += `<button class="more" data-act="more" data-cc="${esc(g.cc)}">Show ${ss.length - lim} more</button>`;
+          h += `</div>`;
+        }
+      }
+      if (!gs.length) h = `<div class="empty">No servers match “${esc(q)}”.</div>`;
+      const el = $("clist"), top = el.scrollTop; el.innerHTML = h; el.scrollTop = top;
+      paintMap();
+    }
+
+    $("clist").addEventListener("click", e => {
+      const b = e.target.closest("[data-act]");
+      if (b) {
+        e.stopPropagation();
+        const a = b.dataset.act;
+        if (a === "disconnect") return disconnect();
+        if (a === "server") return connect(b.dataset.id);
+        if (a === "country") return connectCountry(b.dataset.cc);
+        if (a === "more") { limits[b.dataset.cc] = (limits[b.dataset.cc] || 40) + 60; return renderList(); }
+      }
+      const sr = e.target.closest(".srow"); if (sr) return connect(sr.dataset.id);
+      const cr = e.target.closest(".crow"); if (cr) toggleCountry(cr.dataset.cc);
+    });
+    $("clist").addEventListener("keydown", e => { const cr = e.target.closest(".crow"); if (cr && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggleCountry(cr.dataset.cc); } });
+
+    function toggleCountry(cc, forceOpen) {
+      openCC = forceOpen || openCC !== cc ? cc : null;
+      renderList();
+      if (openCC) {
+        const row = document.querySelector(`.crow[data-cc="${CSS.escape(cc)}"]`);
+        if (row && forceOpen) row.scrollIntoView({ block: "start", behavior: "smooth" });
+        const g = groups(visibleServers()).find(g => g.cc === cc);
+        if (g && g.servers.some(s => !(s.id in lat))) measure(g.servers.slice(0, 80).map(s => s.id));
+      }
+    }
+
+    /* ---------------- latency & connecting ---------------- */
+    async function measure(ids) {
+      if (!ids.length) return {};
+      try {
+        const r = await post("/api/ping", { ids });
+        for (const id of ids) lat[id] = r[id] ?? null;
+        renderList();
+        return r;
+      } catch (e) { toast(e.message); return {}; }
+    }
+    const pickBest = (r, ids) => ids.filter(id => r[id] != null).sort((a, b) => r[a] - r[b])[0];
+    function sample(arr, n) { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]]; } return a.slice(0, n); }
+    const pfWanted = () => S && S.state.portForward;
+
+    async function connect(id) {
+      if (!S.state.key.set) { openSettings(); toast("Add a WireGuard key first"); return; }
+      const s = servers.find(x => x.id === id) || S.state.server;
+      try { S = await post("/api/state", { serverId: id, enabled: true }); lastBytes = null; render(); toast(`Connecting to ${s ? s.name : id}…`); }
+      catch (e) { toast(e.message); }
+    }
+    async function withBusy(label, fn) {
+      if (busy) return; busy = true;
+      const q = $("quick"); q.disabled = true; q.querySelector("span").textContent = label;
+      try { await fn(); } finally { busy = false; q.disabled = false; render(); }
+    }
+    // Fastest server in a country (P2P preferred when port forwarding is on).
+    function connectCountry(cc) {
+      return withBusy("Finding fastest…", async () => {
+        let c = servers.filter(s => s.cc === cc && tabFilter(s));
+        if (pfWanted() && tab !== "tor" && c.some(s => s.p2p)) c = c.filter(s => s.p2p);
+        const ids = sample(c, 80).map(s => s.id), r = await measure(ids), best = pickBest(r, ids);
+        best ? await connect(best) : toast("No server in that country answered");
+      });
+    }
+    // Quick Connect: one probe per country, then the best few countries in depth.
+    function quickConnect() {
+      return withBusy("Finding fastest…", async () => {
+        let c = servers.filter(s => !s.secureCore && !s.tor && !s.free);
+        if (pfWanted()) c = c.filter(s => s.p2p);
+        const byCC = groups(c);
+        const probe = byCC.map(g => sample(g.servers, 1)[0].id);
+        const r1 = await measure(probe);
+        const top = probe.filter(id => r1[id] != null).sort((a, b) => r1[a] - r1[b]).slice(0, 3).map(id => servers.find(s => s.id === id).cc);
+        if (!top.length) return toast("No server answered");
+        const ids = sample(c.filter(s => top.includes(s.cc)), 90).map(s => s.id);
+        const r2 = await measure(ids), best = pickBest(r2, ids);
+        if (best) await connect(best);
+      });
+    }
+    async function disconnect() {
+      try { S = await post("/api/state", { enabled: false }); render(); toast("Disconnected — exit traffic now leaves directly"); } catch (e) { toast(e.message); }
+    }
+    $("quick").onclick = () => {
+      const st = S.state;
+      if (!st.key.set) { openSettings(); return toast("Add a WireGuard key first"); }
+      quickConnect();
+    };
+    $("disconnect").onclick = disconnect;
+    $("measureAll").onclick = async () => {
+      const gs = groups(visibleServers());
+      toast(`Measuring ${gs.length} countries…`);
+      await measure(gs.map(g => sample(g.servers, 1)[0].id).slice(0, 200));
+    };
+
+    /* ---------------- map ---------------- */
+    const W = window.WORLD, CELL = 10;
+    const MW = W.cols * CELL, MH = W.rows.length * CELL;
+    const proj = (lon, lat) => [(lon + 180) / W.step * CELL, (W.latMax - lat) / W.step * CELL + CELL / 2];
+    let mapBuilt = false, view = [0, 0, MW, MH], viewTarget = null, srvCCs = new Set();
+    let cellCC = new Map(), hovCC = null, tiny = [];
+    // Every grid cell (dot plus the gap around it) belongs to a country, so the
+    // map can hit-test the cursor position instead of requiring it on a dot.
+    function buildMap() {
+      const byCC = {}, addDot = (cc, c, r) => { byCC[cc] = (byCC[cc] || "") + `M${c * CELL + 5} ${r * CELL + 5}h0`; cellCC.set(r * W.cols + c, cc); };
+      W.rows.forEach((row, r) => {
+        for (let i = 0; i < row.length; i += 3) for (let k = 0; k < row[i + 1]; k++) addDot(W.ccs[row[i + 2]], row[i] + k, r);
+      });
+      srvCCs = new Set(servers.map(s => s.cc));
+      // Countries too small for the grid (Singapore, Malta, ...) get one dot at their centre.
+      const placed = new Set();
+      for (const cc of srvCCs) if (!byCC[cc] && W.centroids[cc]) {
+        const [x, y] = proj(...W.centroids[cc]); let c = Math.floor(x / CELL), r = Math.floor(y / CELL);
+        // Neighbours like Hong Kong/Macao can share a cell; nudge to a free one.
+        for (const [dc, dr] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1]]) if (!placed.has((r + dr) * W.cols + c + dc)) { c += dc; r += dr; break; }
+        placed.add(r * W.cols + c); addDot(cc, c, r);
+      }
+      // Countries with only a dot or two get a larger, round hit area.
+      const cells = {};
+      for (const [k, cc] of cellCC) (cells[cc] = cells[cc] || []).push(k);
+      tiny = Object.entries(cells).filter(([cc, ks]) => ks.length <= 2 && srvCCs.has(cc))
+        .flatMap(([cc, ks]) => ks.map(k => ({ cc, x: (k % W.cols) * CELL + 5, y: Math.floor(k / W.cols) * CELL + 5 })));
+      let land = "", h = `<defs><linearGradient id="arcGrad" x1="0" x2="1"><stop offset="0" stop-color="#a7a4b5" stop-opacity=".4"/><stop offset="1" stop-color="#2ee6b0"/></linearGradient></defs>`;
+      for (const [cc, d] of Object.entries(byCC)) if (!srvCCs.has(cc)) land += d;
+      h += `<path class="land" d="${land}"/>`;
+      for (const [cc, d] of Object.entries(byCC)) if (srvCCs.has(cc)) h += `<path class="srv" data-cc="${cc}" d="${d}"/>`;
+      h += `<g id="overlay"></g>`;
+      const m = $("map"); m.setAttribute("viewBox", view.join(" ")); m.innerHTML = h;
+      mapBuilt = true;
+      m.addEventListener("mousemove", e => {
+        const cc = ccAt(e), tip = $("tip");
+        setHover(cc);
+        if (!cc) { tip.classList.add("hidden"); return; }
+        const n = servers.filter(s => s.cc === cc && !s.secureCore).length, name = (servers.find(s => s.cc === cc) || {}).country || cc;
+        tip.innerHTML = `${flagImg(cc)}<b>${esc(name)}</b><span style="color:var(--hint)">${n} servers</span>`;
+        const r = $("main").getBoundingClientRect(); tip.style.left = (e.clientX - r.left) + "px"; tip.style.top = (e.clientY - r.top) + "px";
+        tip.classList.remove("hidden");
+      });
+      m.addEventListener("mouseleave", () => { setHover(null); $("tip").classList.add("hidden"); });
+      m.addEventListener("click", e => { const cc = ccAt(e); if (cc) { if (tab !== "all" && !servers.some(s => s.cc === cc && tabFilter(s))) setTab("all"); $("q").value = ""; toggleCountry(cc, true); } });
+    }
+    function ccAt(e) {
+      const m = $("map"), ctm = m.getScreenCTM(); if (!ctm) return null;
+      const pt = m.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+      const p = pt.matrixTransform(ctm.inverse()), c = Math.floor(p.x / CELL), r = Math.floor(p.y / CELL);
+      let best = null, bd = CELL * 1.4;
+      for (const t of tiny) { const d = Math.hypot(p.x - t.x, p.y - t.y); if (d < bd) { bd = d; best = t.cc; } }
+      if (best) return best;
+      let cc = cellCC.get(r * W.cols + c);
+      if (!cc) { // tolerate the cursor sitting just off a coastline/border
+        for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { cc = cellCC.get((r + dr) * W.cols + c + dc); if (cc && srvCCs.has(cc)) break; cc = null; }
+      }
+      return cc && srvCCs.has(cc) ? cc : null;
+    }
+    function setHover(cc) {
+      if (cc === hovCC) return;
+      hovCC = cc;
+      document.querySelectorAll("#map path.srv").forEach(p => p.classList.toggle("hov", p.dataset.cc === cc));
+      $("map").style.cursor = cc ? "pointer" : "";
+    }
+    function pin(x, y, color, big) {
+      return `<g class="pin"><circle class="halo" cx="${x}" cy="${y}" r="${big ? 14 : 9}" fill="${color}" opacity=".5"/><circle cx="${x}" cy="${y}" r="${big ? 7 : 5}" fill="${color}" stroke="#0c0c14" stroke-width="2.5"/></g>`;
+    }
+    function locXY(info) { if (!info || !info.loc) return null; const [la, lo] = info.loc.split(",").map(Number); return isFinite(la) && isFinite(lo) ? proj(lo, la) : null; }
+    function paintMap() {
+      if (!S || !mapBuilt) return;
+      const st = S.state, s = S.status, cur = st.enabled && st.server ? st.server : null;
+      const homeCC = S.hostIP && S.hostIP.country;
+      document.querySelectorAll("#map path.srv").forEach(p => {
+        p.classList.toggle("cur", !!cur && p.dataset.cc === cur.cc);
+        p.classList.toggle("sel", p.dataset.cc === openCC && (!cur || cur.cc !== openCC));
+      });
+      let ov = "", home = locXY(S.hostIP), target = null;
+      if (!home && homeCC && W.centroids[homeCC]) home = proj(...W.centroids[homeCC]);
+      if (cur) {
+        target = (s.phase === "connected" && locXY(s.exit)) || (W.centroids[cur.cc] && proj(...W.centroids[cur.cc]));
+      }
+      if (home && target && (Math.abs(home[0] - target[0]) + Math.abs(home[1] - target[1]) > 12)) {
+        const mx = (home[0] + target[0]) / 2, my = Math.min(home[1], target[1]) - Math.hypot(target[0] - home[0], target[1] - home[1]) * .3;
+        ov += `<path class="arc" d="M${home[0]} ${home[1]}Q${mx} ${my} ${target[0]} ${target[1]}"/>`;
+      }
+      if (home) ov += pin(home[0], home[1], cur ? "#a7a4b5" : "#dc3251", !cur);
+      if (target) ov += pin(target[0], target[1], s.phase === "connected" ? "#2ee6b0" : "#8a6eff", true);
+      $("overlay").innerHTML = ov;
+      // Zoom toward the action like Proton's map; whole world when idle.
+      let v = [0, 0, MW, MH];
+      const pts = [home, target].filter(Boolean);
+      if (pts.length && cur) {
+        const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+        const w = Math.max(MW / 2.6, (Math.max(...xs) - Math.min(...xs)) * 2.2), h = w * MH / MW;
+        const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2 + h * .08;
+        v = [Math.min(Math.max(cx - w / 2, 0), MW - w), Math.min(Math.max(cy - h / 2, 0), MH - h), w, h];
+      }
+      animateView(v);
+    }
+    function animateView(v) {
+      if (viewTarget && viewTarget.join() === v.join()) return;
+      viewTarget = v; const from = [...view], t0 = performance.now(), D = 900;
+      const step = t => {
+        if (viewTarget !== v) return;
+        const k = Math.min(1, (t - t0) / D), e = 1 - Math.pow(1 - k, 3);
+        view = from.map((f, i) => f + (v[i] - f) * e);
+        $("map").setAttribute("viewBox", view.join(" "));
+        if (k < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }
+
+    /* ---------------- status / connection card ---------------- */
+    function render() {
+      if (!S) return;
+      const st = S.state, s = S.status, srv = st.server, host = S.hostIP;
+      let phase = st.enabled ? s.phase : "off";
+      const blocked = st.enabled && (phase === "stalled" || phase === "error") && st.killSwitch;
+      const cls = phase === "connected" ? "connected" : phase === "connecting" ? "connecting" : blocked ? "blocked" : "off";
+      $("main").className = "main st-" + cls;
+      $("stLabel").textContent = { connected: "PROTECTED", connecting: "CONNECTING", blocked: "BLOCKED BY KILL SWITCH", off: "UNPROTECTED" }[cls];
+      $("stIcon").setAttribute("href", cls === "connected" ? "#i-lock" : "#i-lock-open");
+      const showInfo = cls === "connected" ? s.exit : cls === "off" ? host : null;
+      if (showInfo && showInfo.ip) {
+        const cc = showInfo.country;
+        $("stIP").innerHTML = `${flagImg(cc)}<span>${esc([showInfo.city, (servers.find(x => x.cc === cc) || {}).country || cc].filter(Boolean).join(", "))}</span><span>·</span><span>IP <b class="num">${esc(showInfo.ip)}</b></span>`;
+      } else if (cls === "connecting") $("stIP").textContent = srv ? `Connecting to ${srv.name}…` : "";
+      else if (cls === "blocked") $("stIP").textContent = "Exit-node traffic is blocked until the tunnel recovers";
+      else $("stIP").textContent = phase === "connected" ? "Checking IP…" : "";
+
+      // card
+      const on = st.enabled && srv;
+      if (on) {
+        $("cFlag").src = flagSrc(srv.cc);
+        $("cTitle").textContent = srv.country;
+        const feats = [srv.p2p && '<span class="pill">P2P</span>', srv.secureCore && '<span class="pill">Secure Core</span>', srv.streaming && '<span class="pill">Streaming</span>', st.killSwitch && '<span class="pill ok">Kill switch</span>'].filter(Boolean).join(" ");
+        $("cSub").innerHTML = `<span>${esc(srv.name)}${srv.city ? " · " + esc(srv.city) : ""}</span> ${feats}`;
+      } else {
+        $("cFlag").src = flagSrc(host && host.country);
+        $("cTitle").textContent = "You are not connected";
+        $("cSub").innerHTML = st.key.set ? `Tailscale exit-node traffic leaves ${esc(S.host)} directly${host && host.ip ? " from " + esc(host.ip) : ""}` : "Add your Proton WireGuard key in settings to get started";
+      }
+      $("cStats").classList.toggle("hidden", !on);
+      if (on) {
+        const now = Date.now();
+        if (lastBytes && now > lastBytes.t) { const dt = (now - lastBytes.t) / 1000; rates = { down: Math.max(0, (s.rx - lastBytes.rx) / dt), up: Math.max(0, (s.tx - lastBytes.tx) / dt) }; }
+        lastBytes = { rx: s.rx, tx: s.tx, t: now };
+        $("csDown").textContent = bytes(rates.down, true); $("csDown").title = "Total " + bytes(s.rx);
+        $("csUp").textContent = bytes(rates.up, true); $("csUp").title = "Total " + bytes(s.tx);
+        $("csTime").textContent = phase === "connected" ? dur(s.since) : "—";
+        $("csPort").innerHTML = s.pfPort ? `<span class="pill btnlike" id="portPill" title="Copy">${s.pfPort} ${ico("copy")}</span>` : (st.portForward ? (srv.p2p ? "…" : "n/a") : "off");
+        const pp = $("portPill"); if (pp) pp.onclick = copyPort;
+      }
+      const al = [];
+      if (st.enabled && s.message) al.push(["bad", s.message]);
+      if (s.netError) al.push(["bad", "Network setup: " + s.netError]);
+      if (on && st.portForward && s.pfError) al.push(["warn", s.pfError]);
+      $("alerts").innerHTML = al.map(([k, m]) => `<div class="alert ${k}">${ico("alert")}<span>${esc(m)}</span></div>`).join("");
+
+      $("quick").classList.toggle("hidden", !!on);
+      $("disconnect").classList.toggle("hidden", !on);
+      if (!busy) $("quick").querySelector("span").textContent = "Quick Connect";
+
+      // settings
+      for (const k of ["killSwitch", "dnsViaVPN", "portForward"]) if (document.activeElement !== $(k)) $(k).checked = st[k];
+      $("pfBox").classList.toggle("hidden", !st.portForward);
+      $("pfPort").textContent = s.pfPort || "—";
+      $("pfCopy").classList.toggle("hidden", !s.pfPort);
+      $("pfInfo").textContent = s.pfPort ? `→ ${st.pfTarget || "this machine"}:${st.pfTargetPort || s.pfPort} · renewed ${ago(s.pfRenewed)}` : (on ? (srv.p2p ? "waiting for the tunnel…" : "needs a P2P server") : "connect to a P2P server");
+      if (!["pfTarget", "pfTargetPort"].includes(document.activeElement.id)) { $("pfTarget").value = st.pfTarget || ""; $("pfTargetPort").value = st.pfTargetPort || ""; }
+      const k = st.key;
+      $("keySet").classList.toggle("hidden", !k.set || editingKey);
+      $("keyForm").classList.toggle("hidden", k.set && !editingKey);
+      $("kCancel").classList.toggle("hidden", !k.set);
+      if (k.set) {
+        $("kLabel").textContent = k.label || "Configured";
+        $("kAddr").textContent = (k.addresses || []).join(", ");
+        $("kPmp").textContent = k.natpmp == null ? "Unknown" : k.natpmp ? "Enabled" : "Disabled — port forwarding won't work";
+      }
+      $("aHost").textContent = S.host;
+      $("aHostIP").textContent = host && host.ip ? `${host.ip} · ${[host.city, host.country].filter(Boolean).join(", ")}` : "—";
+      const c = S.catalog;
+      $("aCat").textContent = `${c.count} servers, ${new Date(c.updated).toLocaleDateString()}${c.error ? " (refresh failed)" : ""}`;
+      $("aUser").textContent = S.user || S.login || "—";
+      $("aVer").textContent = S.version || "dev";
+      paintMap();
+    }
+    function copyPort() { navigator.clipboard.writeText(String(S.status.pfPort)).then(() => toast("Port copied")); }
+    $("pfCopy").onclick = copyPort;
+
+    /* ---------------- settings ---------------- */
+    function openSettings() { $("drawer").classList.add("open"); $("scrim").classList.add("open"); $("drawer").setAttribute("aria-hidden", "false"); }
+    function closeSettings() { $("drawer").classList.remove("open"); $("scrim").classList.remove("open"); $("drawer").setAttribute("aria-hidden", "true"); }
+    $("openSettings").onclick = openSettings; $("closeSettings").onclick = closeSettings; $("scrim").onclick = closeSettings;
+    document.addEventListener("keydown", e => { if (e.key === "Escape") closeSettings(); });
+    async function setState(patch, msg) { try { S = await post("/api/state", patch); render(); if (msg) toast(msg); } catch (e) { toast(e.message); refresh(); } }
+    for (const k of ["killSwitch", "dnsViaVPN", "portForward"]) $(k).onchange = e => setState({ [k]: e.target.checked });
+    $("pfSave").onclick = () => setState({ pfTarget: $("pfTarget").value.trim(), pfTargetPort: Number($("pfTargetPort").value) || 0 }, "Forwarding target saved");
+    $("kSave").onclick = async () => { try { S = await post("/api/key", { config: $("kText").value }); editingKey = false; $("kText").value = ""; render(); toast("Key saved"); } catch (e) { toast(e.message); } };
+    $("kReplace").onclick = () => { editingKey = true; render(); $("kText").focus(); };
+    $("kCancel").onclick = () => { editingKey = false; render(); };
+    $("kRemove").onclick = async () => { if (!confirm("Remove the WireGuard key? The VPN will be turned off.")) return; try { S = await api("/api/key", { method: "DELETE" }); render(); } catch (e) { toast(e.message); } };
+    $("refreshCat").onclick = async () => { try { await post("/api/catalog/refresh"); await loadServers(); refresh(); toast("Server list updated"); } catch (e) { toast(e.message); } };
+
+    /* ---------------- tabs / search ---------------- */
+    function setTab(t) { tab = t; document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b.dataset.t === t)); renderList(); }
+    $("tabs").onclick = e => { const b = e.target.closest(".tab"); if (b) setTab(b.dataset.t); };
+    $("q").oninput = () => renderList();
+
+    /* ---------------- boot ---------------- */
+    async function loadServers() { servers = await api("/api/servers"); if (!mapBuilt) buildMap(); renderList(); }
+    // Tick the session clock every second; status itself is polled every 2s.
+    setInterval(() => {
+      if (S && S.state.enabled && S.status.phase === "connected" && !document.hidden) $("csTime").textContent = dur(S.status.since);
+    }, 1000);
+    async function refresh() { try { S = await api("/api/status"); if (S.now) clockOffset = Date.parse(S.now) - Date.now(); render(); } catch (e) { $("stLabel").textContent = "DASHBOARD OFFLINE"; $("stIP").textContent = e.message; } }
+    let pollT;
+    function schedule() { clearTimeout(pollT); pollT = setTimeout(async () => { if (!document.hidden) { await refresh(); if (S) renderListIfConnChanged(); } schedule(); }, 2000); }
+    let lastConnKey = "";
+    function renderListIfConnChanged() { const k = `${S.state.enabled}|${S.state.server && S.state.server.id}`; if (k !== lastConnKey) { lastConnKey = k; renderList(); } }
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+    (async () => {
+      await refresh();
+      await loadServers();
+      if (S) {
+        lastConnKey = `${S.state.enabled}|${S.state.server && S.state.server.id}`; if (S.state.server && S.state.enabled) openCC = S.state.server.cc; renderList(); render();
+        const row = openCC && document.querySelector(`.crow[data-cc="${CSS.escape(openCC)}"]`);
+        if (row && matchMedia("(min-width: 901px)").matches) $("clist").scrollTop = row.offsetTop - $("clist").offsetTop - 8;
+        if (openCC) measure(servers.filter(x => x.cc === openCC && tabFilter(x)).slice(0, 80).map(x => x.id));
+      }
+      if (location.hash === "#settings") openSettings();
+      schedule();
+    })();
+  </script>
+</body>
+
+</html>
