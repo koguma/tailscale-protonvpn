@@ -21,7 +21,9 @@ Tailscale for the network.
   server's real IP. It's in place at boot before Tailscale starts. IPv6 can't bypass the VPN.
 - **Port forwarding** (NAT-PMP on P2P servers), auto-renewed. Forward it to the server itself or
   to any device on your tailnet.
-- **DNS through the VPN** for exit-node clients.
+- **DNS through the VPN** for exit-node clients only: their lookups leave from the Proton IP (and
+  are blocked with the kill switch when the tunnel is down), while the server's own DNS is untouched.
+  MagicDNS names keep working.
 - **Persistent**: survives reboots. Restarting or upgrading tailscale-protonvpn doesn't drop the tunnel.
 - **Private dashboard**: served only on your tailnet via `tailscale serve` (HTTPS, no open ports).
 
@@ -96,7 +98,6 @@ onto the desired state:
   |---|---|---|
   | 5199 | `ipproto udp sport <forwarded port>` → tunnel | UDP replies from apps receiving the forwarded port |
   | 5200 | `fwmark 0xca6c` → tunnel | tailscale-protonvpn's own probes (NAT-PMP, exit-IP check) |
-  | 5201–5208 | `to <upstream DNS>` → tunnel | DNS through the VPN |
   | 5209 | `from <tunnel IP>` → tunnel | replies from services receiving the forwarded port |
   | 5270 | *(Tailscale)* `lookup 52` | tailnet destinations stay on the tailnet |
   | 5275 | `iif tailscale0` → tunnel | **exit-node traffic into the VPN** |
@@ -104,6 +105,11 @@ onto the desired state:
 
 - **Firewall**: its own iptables chains (`PE-*`): masquerade into the tunnel, drop unsolicited
   inbound traffic except the forwarded port, MSS clamping, port-forward redirect/DNAT.
+  For DNS, `PE-DNS` (mangle `OUTPUT`) marks tailscaled's plain port-53 queries, which are the
+  ones it forwards for exit-node clients, with `0xca6c` so they take the tunnel. They're matched by
+  tailscaled's bypass mark (TCP) and its cgroup (UDP is sent unmarked), and dropped instead while
+  the kill switch is blocking. The server's own lookups go out as DoH (with Cloudflare-style tailnet
+  resolvers) and aren't matched, except Tailscale's plain-DNS retry when DoH takes over 500 ms.
 - **Port forwarding**: NAT-PMP requests to `10.2.0.1` every 45 s, always as `internal 1 / external 0`
   (Proton then keeps the same public port; other requests use up its mapping quota). Arriving
   traffic is redirected to the public port number, or DNATed to the tailnet target you set.
@@ -133,7 +139,7 @@ internal/
   controller/             reconcile loop and kill-switch decisions, saved settings
                           (state.go), ProtonVPN server list (servers.go) + snapshot/servers.json
   vpn/                    network plumbing: WireGuard tunnel, policy routing + firewall,
-                          DNS discovery, NAT-PMP port forwarding, exit-IP/latency probes
+                          NAT-PMP port forwarding, exit-IP/latency probes
   web/                    dashboard (HTML, map data, flags), embedded into the binary
 docs/                     README assets
 ```

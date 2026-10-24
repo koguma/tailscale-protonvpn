@@ -38,7 +38,6 @@ type Status struct {
 	PFInternal int           `json:"pfInternal,omitempty"` // port packets actually arrive on
 	PFError    string        `json:"pfError,omitempty"`
 	PFRenewed  time.Time     `json:"pfRenewed,omitempty"`
-	DNS        []string      `json:"dns,omitempty"`
 	NetError   string        `json:"netError,omitempty"`
 	Leak       string        `json:"leak,omitempty"` // human description of what exit traffic does right now
 }
@@ -208,11 +207,7 @@ func (c *Controller) reconcile() {
 	c.mu.Unlock()
 
 	phase, msg, healthy := tunnelPhase(tunErr, stats.Handshake, since, time.Now())
-	var resolvers []netip.Addr
-	if st.DNSViaVPN && healthy {
-		resolvers = vpn.UpstreamDNS()
-	}
-	d := desiredNet(st, healthy, resolvers, pfPort, pfInternal)
+	d := desiredNet(st, healthy, pfPort, pfInternal)
 	netErr := c.net.Apply(d)
 	if netErr != nil {
 		log.Printf("network: %v", netErr)
@@ -226,14 +221,10 @@ func (c *Controller) reconcile() {
 		leak = "direct"
 	}
 
-	var dns []string
-	for _, a := range d.DNS {
-		dns = append(dns, a.String())
-	}
 	c.mu.Lock()
 	c.status.Phase, c.status.Message = phase, msg
 	c.status.Handshake, c.status.RX, c.status.TX = stats.Handshake, stats.RX, stats.TX
-	c.status.DNS, c.status.Leak = dns, leak
+	c.status.Leak = leak
 	c.status.NetError = ""
 	if netErr != nil {
 		c.status.NetError = netErr.Error()
@@ -382,7 +373,7 @@ func tunnelPhase(tunErr error, handshake, since, now time.Time) (phase, msg stri
 
 // desiredNet derives routing and firewall state from the settings and tunnel
 // health. This is where the kill switch semantics live.
-func desiredNet(st State, healthy bool, dns []netip.Addr, pfPort, pfInternal int) vpn.Desired {
+func desiredNet(st State, healthy bool, pfPort, pfInternal int) vpn.Desired {
 	v6 := st.Key.HasV6()
 	d := vpn.Desired{
 		Exit4:    healthy || st.KillSwitch,
@@ -396,9 +387,10 @@ func desiredNet(st State, healthy bool, dns []netip.Addr, pfPort, pfInternal int
 			d.TunnelAddrs = append(d.TunnelAddrs, p.Addr())
 		}
 	}
-	if st.DNSViaVPN && healthy {
-		d.DNS = dns
-	}
+	// Exit clients' DNS follows their traffic: tunnel when up, blocked by
+	// the kill switch when down, direct when the kill switch is off.
+	d.DNS = st.DNSViaVPN && healthy
+	d.DNSBlock = st.DNSViaVPN && !healthy && st.KillSwitch
 	if healthy && st.PortForward && pfPort > 0 {
 		d.PFPort, d.PFInternal, d.PFTarget, d.PFTargetPort = pfPort, pfInternal, st.PFTarget, st.PFTargetPort
 	}

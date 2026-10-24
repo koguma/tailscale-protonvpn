@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"fmt"
 	"net/netip"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -16,13 +18,19 @@ const Table = 51820
 // FWMark marks host sockets that must use the tunnel (NAT-PMP, exit-IP probe).
 const FWMark = 0xca6c
 
+// tsBypassMark is the mark tailscaled puts on its own sockets (rule 5210).
+const tsBypassMark = 0x80000
+
+// tsCgroup is tailscaled's cgroup (v2, relative to /sys/fs/cgroup).
+const tsCgroup = "system.slice/tailscaled.service"
+
 // Rule priorities. Tailscale uses 5210-5270 (5270 = "lookup 52", the tailnet
 // routes), so exit traffic is matched right after it: tailnet destinations
 // still go to tailscale0, everything else from tailscale0 goes to the tunnel.
 const (
 	prefSport   = 5199 // udp from the forwarded port -> tunnel (see rules)
 	prefMark    = 5200 // fwmark FWMark -> tunnel (host sockets that opt in)
-	prefDNSBase = 5201 // to <upstream DNS> -> tunnel, up to prefDNSMax
+	prefDNSBase = 5201 // retired "to <upstream DNS>" rules, still removed on upgrade
 	prefDNSMax  = 5208
 	prefSrc     = 5209 // from <tunnel address> -> tunnel (replies from local listeners)
 	prefExit    = 5275 // iif tailscale0 -> tunnel
@@ -42,7 +50,8 @@ type Desired struct {
 	Exit4, Exit6   bool // route exit-node traffic into the tunnel
 	Block4, Block6 bool // prohibit exit-node traffic that the tunnel doesn't take
 	TunnelV6       bool
-	DNS            []netip.Addr // upstream resolvers to route through the tunnel
+	DNS            bool // send exit-node clients' DNS into the tunnel
+	DNSBlock       bool // drop exit-node clients' DNS (kill switch, tunnel down)
 	PFPort         int
 	PFInternal     int // port Proton delivers to (normally == PFPort)
 	TunnelAddrs    []netip.Addr
@@ -55,6 +64,7 @@ type Router struct {
 	applied      map[string]string // "4/5275" -> rule args
 	ipt          map[string]string // "iptables" -> restore payload
 	iptAppliedAt time.Time
+	cgIno        uint64 // inode of tsCgroup when the firewall was last applied
 }
 
 func ipFam(v6 bool) string {
@@ -120,14 +130,6 @@ func (n *Router) rules(d Desired, v6 bool) map[int]string {
 	}
 	if block {
 		r[prefBlock] = "iif tailscale0 prohibit"
-	}
-	i := prefDNSBase
-	for _, a := range d.DNS {
-		if a.Is6() != v6 || i > prefDNSMax {
-			continue
-		}
-		r[i] = fmt.Sprintf("to %s lookup %d", a, Table)
-		i++
 	}
 	return r
 }
@@ -199,9 +201,12 @@ var jumps = []chainJump{
 	{"nat", "PREROUTING", "PE-PRE"},
 	{"nat", "POSTROUTING", "PE-POST"},
 	{"mangle", "FORWARD", "PE-MSS"},
+	{"mangle", "OUTPUT", "PE-DNS"},
 }
 
-func firewallPayload(d Desired, v6 bool) string {
+// firewallPayload renders our chains. cgroup is tailscaled's cgroup path, or
+// "" when it doesn't exist (a rule naming a missing cgroup fails to load).
+func firewallPayload(d Desired, v6 bool, cgroup string) string {
 	var b strings.Builder
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
 	pf := !v6 && d.PFPort > 0
@@ -255,6 +260,31 @@ func firewallPayload(d Desired, v6 bool) string {
 	w(":PE-MSS - [0:0]")
 	w("-A PE-MSS -o %s -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu", Interface)
 	w("-A PE-MSS -i %s -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu", Interface)
+	// Exit-node clients send DNS to tailscaled over the tailnet, and it
+	// forwards them as plain DNS on port 53: over TCP from its marked
+	// sockets, over UDP unmarked, so match both the mark and its cgroup. The
+	// host's own lookups also pass through tailscaled under MagicDNS but go
+	// out as DoH, so tailscaled + port 53 picks out only the exit clients'.
+	w(":PE-DNS - [0:0]")
+	target := ""
+	switch {
+	case d.DNSBlock, d.DNS && v6 && !d.TunnelV6:
+		target = "DROP"
+	case d.DNS:
+		target = fmt.Sprintf("MARK --set-mark 0x%x", FWMark)
+	}
+	if target != "" {
+		tailnet := "100.64.0.0/10"
+		if v6 {
+			tailnet = "fd7a:115c:a1e0::/48"
+		}
+		for _, proto := range []string{"udp", "tcp"} {
+			w("-A PE-DNS ! -d %s -p %s -m %s --dport 53 -m mark --mark 0x%x/0xff0000 -j %s", tailnet, proto, proto, tsBypassMark, target)
+			if cgroup != "" {
+				w("-A PE-DNS ! -d %s -p %s -m %s --dport 53 -m cgroup --path %s -j %s", tailnet, proto, proto, cgroup, target)
+			}
+		}
+	}
 	w("COMMIT")
 	return b.String()
 }
@@ -262,12 +292,24 @@ func firewallPayload(d Desired, v6 bool) string {
 func (n *Router) applyFirewall(d Desired) error {
 	var errs []string
 	refresh := time.Since(n.iptAppliedAt) > 5*time.Minute
+	// The cgroup match binds to the cgroup that exists when the rule is
+	// loaded, so reload whenever tailscaled restarts into a new one.
+	cgroup, ino := "", uint64(0)
+	if fi, err := os.Stat("/sys/fs/cgroup/" + tsCgroup); err == nil {
+		cgroup = tsCgroup
+		if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+			ino = st.Ino
+		}
+	}
+	if ino != n.cgIno {
+		refresh = true
+	}
 	for _, v6 := range []bool{false, true} {
 		bin := "iptables"
 		if v6 {
 			bin = "ip6tables"
 		}
-		payload := firewallPayload(d, v6)
+		payload := firewallPayload(d, v6, cgroup)
 		if refresh || n.ipt[bin] != payload {
 			if err := RunStdin(payload, bin+"-restore", "-w", "--noflush"); err != nil {
 				errs = append(errs, err.Error())
@@ -286,6 +328,7 @@ func (n *Router) applyFirewall(d Desired) error {
 	}
 	if refresh {
 		n.iptAppliedAt = time.Now()
+		n.cgIno = ino
 	}
 	if len(errs) > 0 {
 		return fmt.Errorf("firewall: %s", strings.Join(errs, "; "))

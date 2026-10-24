@@ -50,7 +50,7 @@ func TestKillSwitchMatrix(t *testing.T) {
 					key = keyWith("10.2.0.2/32", "2a07:b944::2:2/128")
 				}
 				st := State{Enabled: true, KillSwitch: ks, Key: key}
-				d := desiredNet(st, healthy, nil, 0, 0)
+				d := desiredNet(st, healthy, 0, 0)
 				name := map[bool]string{true: "healthy", false: "down"}[healthy] +
 					map[bool]string{true: "+killswitch", false: ""}[ks] +
 					map[bool]string{true: "+v6", false: ""}[v6]
@@ -83,25 +83,32 @@ func TestKillSwitchMatrix(t *testing.T) {
 }
 
 func TestDesiredNetExtras(t *testing.T) {
-	dns := []netip.Addr{netip.MustParseAddr("1.1.1.1")}
 	st := State{Enabled: true, DNSViaVPN: true, PortForward: true, PFTarget: "100.1.2.3", PFTargetPort: 8080, Key: keyWith("10.2.0.2/32")}
 
-	d := desiredNet(st, true, dns, 40000, 1)
-	if len(d.DNS) != 1 || d.PFPort != 40000 || d.PFInternal != 1 || d.PFTarget != "100.1.2.3" || d.PFTargetPort != 8080 {
+	d := desiredNet(st, true, 40000, 1)
+	if !d.DNS || d.DNSBlock || d.PFPort != 40000 || d.PFInternal != 1 || d.PFTarget != "100.1.2.3" || d.PFTargetPort != 8080 {
 		t.Errorf("healthy: %+v", d)
 	}
 	if len(d.TunnelAddrs) != 1 || d.TunnelAddrs[0] != netip.MustParseAddr("10.2.0.2") {
 		t.Errorf("tunnel addrs = %v", d.TunnelAddrs)
 	}
 
-	// A dead tunnel must not pull DNS or port forwarding into it.
-	if d := desiredNet(st, false, dns, 40000, 1); len(d.DNS) != 0 || d.PFPort != 0 {
-		t.Errorf("unhealthy: DNS=%v PFPort=%d", d.DNS, d.PFPort)
+	// A dead tunnel must not pull DNS or port forwarding into it. Without the
+	// kill switch exit clients' DNS goes direct; with it, it is blocked.
+	if d := desiredNet(st, false, 40000, 1); d.DNS || d.DNSBlock || d.PFPort != 0 {
+		t.Errorf("unhealthy: %+v", d)
+	}
+	ks := st
+	ks.KillSwitch = true
+	if d := desiredNet(ks, false, 40000, 1); d.DNS || !d.DNSBlock {
+		t.Errorf("unhealthy + kill switch: DNS=%v DNSBlock=%v", d.DNS, d.DNSBlock)
 	}
 
-	off := st
+	off := ks
 	off.DNSViaVPN, off.PortForward = false, false
-	if d := desiredNet(off, true, dns, 40000, 1); len(d.DNS) != 0 || d.PFPort != 0 {
-		t.Errorf("features off: DNS=%v PFPort=%d", d.DNS, d.PFPort)
+	for _, healthy := range []bool{true, false} {
+		if d := desiredNet(off, healthy, 40000, 1); d.DNS || d.DNSBlock || (healthy && d.PFPort != 0) {
+			t.Errorf("features off (healthy=%v): %+v", healthy, d)
+		}
 	}
 }

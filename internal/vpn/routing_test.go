@@ -21,14 +21,13 @@ func TestRules(t *testing.T) {
 	exit := fmt.Sprintf("iif tailscale0 lookup %d", Table)
 
 	t.Run("full v4 setup", func(t *testing.T) {
-		d := Desired{Exit4: true, Block4: true, DNS: addrs("1.1.1.1", "2606:4700::1111"), TunnelAddrs: addrs("10.2.0.2")}
+		d := Desired{Exit4: true, Block4: true, DNS: true, TunnelAddrs: addrs("10.2.0.2")}
 		r := n.rules(d, false)
 		want := map[int]string{
-			prefMark:    mark,
-			prefDNSBase: fmt.Sprintf("to 1.1.1.1 lookup %d", Table),
-			prefSrc:     fmt.Sprintf("from 10.2.0.2 lookup %d", Table),
-			prefExit:    exit,
-			prefBlock:   "iif tailscale0 prohibit",
+			prefMark:  mark,
+			prefSrc:   fmt.Sprintf("from 10.2.0.2 lookup %d", Table),
+			prefExit:  exit,
+			prefBlock: "iif tailscale0 prohibit",
 		}
 		if len(r) != len(want) {
 			t.Fatalf("rules = %v, want %v", r, want)
@@ -41,16 +40,13 @@ func TestRules(t *testing.T) {
 	})
 
 	t.Run("v6 family only gets v6 entries", func(t *testing.T) {
-		d := Desired{Exit4: true, Block6: true, DNS: addrs("1.1.1.1", "2606:4700::1111"), TunnelAddrs: addrs("10.2.0.2")}
+		d := Desired{Exit4: true, Block6: true, TunnelAddrs: addrs("10.2.0.2")}
 		r := n.rules(d, true)
 		if _, ok := r[prefExit]; ok {
 			t.Error("v6 exit rule present though Exit6 is false")
 		}
 		if r[prefBlock] != "iif tailscale0 prohibit" {
 			t.Error("v6 block rule missing")
-		}
-		if r[prefDNSBase] != fmt.Sprintf("to 2606:4700::1111 lookup %d", Table) {
-			t.Errorf("v6 DNS rule = %q", r[prefDNSBase])
 		}
 		if _, ok := r[prefSrc]; ok {
 			t.Error("v6 source rule present without a v6 tunnel address")
@@ -81,28 +77,6 @@ func TestRules(t *testing.T) {
 			t.Errorf("rules = %v", r)
 		}
 	})
-
-	t.Run("DNS rules are capped to the reserved range", func(t *testing.T) {
-		var many []netip.Addr
-		for i := 1; i <= 12; i++ {
-			many = append(many, netip.AddrFrom4([4]byte{9, 9, 9, byte(i)}))
-		}
-		r := n.rules(Desired{DNS: many}, false)
-		count := 0
-		for p := range r {
-			if p >= prefDNSBase && p <= prefDNSMax {
-				count++
-			}
-		}
-		if count != prefDNSMax-prefDNSBase+1 {
-			t.Errorf("%d DNS rules, want %d", count, prefDNSMax-prefDNSBase+1)
-		}
-		for p := range r {
-			if p > prefDNSMax && p < prefSrc {
-				t.Errorf("DNS rule spilled into pref %d", p)
-			}
-		}
-	})
 }
 
 func TestFirewallPayload(t *testing.T) {
@@ -124,7 +98,7 @@ func TestFirewallPayload(t *testing.T) {
 	}
 
 	t.Run("baseline protections", func(t *testing.T) {
-		p := firewallPayload(Desired{}, false)
+		p := firewallPayload(Desired{}, false, "")
 		has(t, p,
 			"-A PE-INPUT -i pvpn0 -m conntrack --ctstate RELATED,ESTABLISHED,DNAT -j ACCEPT",
 			"-A PE-INPUT -i pvpn0 -j DROP",
@@ -139,7 +113,7 @@ func TestFirewallPayload(t *testing.T) {
 	})
 
 	t.Run("forward to a tailnet device", func(t *testing.T) {
-		p := firewallPayload(Desired{PFPort: 40000, PFInternal: 1, PFTarget: "100.1.2.3", PFTargetPort: 8080}, false)
+		p := firewallPayload(Desired{PFPort: 40000, PFInternal: 1, PFTarget: "100.1.2.3", PFTargetPort: 8080}, false, "")
 		has(t, p,
 			"-p tcp -m tcp --dport 1 -j DNAT --to-destination 100.1.2.3:8080",
 			"-p udp -m udp --dport 1 -j DNAT --to-destination 100.1.2.3:8080",
@@ -148,26 +122,44 @@ func TestFirewallPayload(t *testing.T) {
 	})
 
 	t.Run("Proton delivers to port 1: redirect to the public port", func(t *testing.T) {
-		p := firewallPayload(Desired{PFPort: 40000, PFInternal: 1}, false)
+		p := firewallPayload(Desired{PFPort: 40000, PFInternal: 1}, false, "")
 		has(t, p, "-p tcp -m tcp --dport 1 -j REDIRECT --to-ports 40000", "-p udp -m udp --dport 1 -j REDIRECT --to-ports 40000")
 	})
 
 	t.Run("local port already matches: plain accept", func(t *testing.T) {
-		p := firewallPayload(Desired{PFPort: 40000, PFInternal: 40000}, false)
+		p := firewallPayload(Desired{PFPort: 40000, PFInternal: 40000}, false, "")
 		has(t, p, "-A PE-INPUT -i pvpn0 -p tcp -m tcp --dport 40000 -j ACCEPT", "-A PE-INPUT -i pvpn0 -p udp -m udp --dport 40000 -j ACCEPT")
 		hasNot(t, p, "REDIRECT", "DNAT --to")
 	})
 
 	t.Run("custom local port", func(t *testing.T) {
-		p := firewallPayload(Desired{PFPort: 40000, PFInternal: 1, PFTargetPort: 6881}, false)
+		p := firewallPayload(Desired{PFPort: 40000, PFInternal: 1, PFTargetPort: 6881}, false, "")
 		has(t, p, "--dport 1 -j REDIRECT --to-ports 6881")
 	})
 
+	t.Run("exit-client DNS", func(t *testing.T) {
+		sel := "-p udp -m udp --dport 53 -m mark --mark 0x80000/0xff0000 -j "
+		if p := firewallPayload(Desired{}, false, ""); strings.Contains(p, "-A PE-DNS") {
+			t.Errorf("DNS rules without DNS enabled:\n%s", p)
+		}
+		has(t, firewallPayload(Desired{DNS: true}, false, ""), ":PE-DNS - [0:0]",
+			"-A PE-DNS ! -d 100.64.0.0/10 "+sel+"MARK --set-mark 0xca6c",
+			"-A PE-DNS ! -d 100.64.0.0/10 -p tcp -m tcp --dport 53")
+		has(t, firewallPayload(Desired{DNSBlock: true}, false, ""), sel+"DROP")
+		// tailscaled's UDP forwards are unmarked: match its cgroup too.
+		has(t, firewallPayload(Desired{DNS: true}, false, tsCgroup),
+			"-p udp -m udp --dport 53 -m cgroup --path system.slice/tailscaled.service -j MARK --set-mark 0xca6c")
+		// Without tunnel IPv6 a marked v6 query would fall through to the
+		// main table, so it is dropped instead.
+		has(t, firewallPayload(Desired{DNS: true}, true, ""), "! -d fd7a:115c:a1e0::/48 "+sel+"DROP")
+		has(t, firewallPayload(Desired{DNS: true, TunnelV6: true}, true, ""), sel+"MARK --set-mark 0xca6c")
+	})
+
 	t.Run("ipv6", func(t *testing.T) {
-		p := firewallPayload(Desired{PFPort: 40000, PFInternal: 1}, true)
+		p := firewallPayload(Desired{PFPort: 40000, PFInternal: 1}, true, "")
 		hasNot(t, p, "40000", "MASQUERADE")
 		has(t, p, "-A PE-INPUT -i pvpn0 -j DROP")
-		p = firewallPayload(Desired{TunnelV6: true}, true)
+		p = firewallPayload(Desired{TunnelV6: true}, true, "")
 		has(t, p, "-A PE-POST -o pvpn0 -j MASQUERADE")
 	})
 }
