@@ -200,6 +200,7 @@ var jumps = []chainJump{
 	{"filter", "FORWARD", "PE-FORWARD"},
 	{"nat", "PREROUTING", "PE-PRE"},
 	{"nat", "POSTROUTING", "PE-POST"},
+	{"nat", "OUTPUT", "PE-OUT"},
 	{"mangle", "FORWARD", "PE-MSS"},
 	{"mangle", "OUTPUT", "PE-DNS"},
 }
@@ -236,6 +237,7 @@ func firewallPayload(d Desired, v6 bool, cgroup string) string {
 	w("*nat")
 	w(":PE-PRE - [0:0]")
 	w(":PE-POST - [0:0]")
+	w(":PE-OUT - [0:0]")
 	if pf {
 		for _, proto := range []string{"tcp", "udp"} {
 			switch {
@@ -253,6 +255,17 @@ func firewallPayload(d Desired, v6 bool, cgroup string) string {
 	}
 	if !v6 || d.TunnelV6 {
 		w("-A PE-POST -o %s -j MASQUERADE", Interface)
+	}
+	// tailscaled sends every exit client's lookup to the same resolver (the
+	// first nameserver in resolv.conf), and Proton throttles bursts of new
+	// flows to any one outside address (~50 UDP, a few TCP per second), so a
+	// device switching to this exit node lost most of its first lookups.
+	// Proton's own resolver isn't throttled: send the queries PE-DNS marked
+	// for the tunnel there instead.
+	if d.DNS && !v6 {
+		for _, proto := range []string{"udp", "tcp"} {
+			w("-A PE-OUT -p %s -m %s --dport 53 -m mark --mark 0x%x -j DNAT --to-destination %s", proto, proto, FWMark, Gateway)
+		}
 	}
 	w("COMMIT")
 

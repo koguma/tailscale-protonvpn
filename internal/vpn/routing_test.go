@@ -139,13 +139,19 @@ func TestFirewallPayload(t *testing.T) {
 
 	t.Run("exit-client DNS", func(t *testing.T) {
 		sel := "-p udp -m udp --dport 53 -m mark --mark 0x80000/0xff0000 -j "
-		if p := firewallPayload(Desired{}, false, ""); strings.Contains(p, "-A PE-DNS") {
-			t.Errorf("DNS rules without DNS enabled:\n%s", p)
-		}
+		hasNot(t, firewallPayload(Desired{}, false, ""), "-A PE-DNS", "-A PE-OUT")
 		has(t, firewallPayload(Desired{DNS: true}, false, ""), ":PE-DNS - [0:0]",
 			"-A PE-DNS ! -d 100.64.0.0/10 "+sel+"MARK --set-mark 0xca6c",
 			"-A PE-DNS ! -d 100.64.0.0/10 -p tcp -m tcp --dport 53")
-		has(t, firewallPayload(Desired{DNSBlock: true}, false, ""), sel+"DROP")
+		// Marked queries go to Proton's resolver, which doesn't throttle
+		// bursts the way it does for outside addresses.
+		has(t, firewallPayload(Desired{DNS: true}, false, ""), ":PE-OUT - [0:0]",
+			"-A PE-OUT -p udp -m udp --dport 53 -m mark --mark 0xca6c -j DNAT --to-destination 10.2.0.1",
+			"-A PE-OUT -p tcp -m tcp --dport 53 -m mark --mark 0xca6c -j DNAT --to-destination 10.2.0.1")
+		p := firewallPayload(Desired{DNSBlock: true}, false, "")
+		has(t, p, sel+"DROP")
+		hasNot(t, p, "-A PE-OUT")
+		hasNot(t, firewallPayload(Desired{DNS: true, TunnelV6: true}, true, ""), "-A PE-OUT")
 		// tailscaled's UDP forwards are unmarked: match its cgroup too.
 		has(t, firewallPayload(Desired{DNS: true}, false, tsCgroup),
 			"-p udp -m udp --dport 53 -m cgroup --path system.slice/tailscaled.service -j MARK --set-mark 0xca6c")

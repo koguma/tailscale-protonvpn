@@ -21,9 +21,9 @@ Tailscale for the network.
   server's real IP. It's in place at boot before Tailscale starts. IPv6 can't bypass the VPN.
 - **Port forwarding** (NAT-PMP on P2P servers), auto-renewed. Forward it to the server itself or
   to any device on your tailnet.
-- **DNS through the VPN** for exit-node clients only: their lookups leave from the Proton IP (and
-  are blocked with the kill switch when the tunnel is down), while the server's own DNS is untouched.
-  MagicDNS names keep working.
+- **DNS through the VPN** for exit-node clients only: their lookups are answered by Proton's resolver
+  inside the tunnel (and blocked with the kill switch when the tunnel is down), while the server's own
+  DNS is untouched. MagicDNS names keep working.
 - **Persistent**: survives reboots. Restarting or upgrading tailscale-protonvpn doesn't drop the tunnel.
 - **Private dashboard**: served only on your tailnet via `tailscale serve` (HTTPS, no open ports).
 
@@ -110,6 +110,10 @@ onto the desired state:
   tailscaled's bypass mark (TCP) and its cgroup (UDP is sent unmarked), and dropped instead while
   the kill switch is blocking. The server's own lookups go out as DoH (with Cloudflare-style tailnet
   resolvers) and aren't matched, except Tailscale's plain-DNS retry when DoH takes over 500 ms.
+  `PE-OUT` (nat `OUTPUT`) then DNATs the marked queries to Proton's resolver `10.2.0.1`. tailscaled
+  sends them all to one upstream (the first `nameserver` in `/etc/resolv.conf`), and Proton throttles
+  bursts of new flows to any single outside address, so a device switching to the exit node would
+  otherwise lose most of its first lookups.
 - **Port forwarding**: NAT-PMP requests to `10.2.0.1` every 45 s, always as `internal 1 / external 0`
   (Proton then keeps the same public port; other requests use up its mapping quota). Arriving
   traffic is redirected to the public port number, or DNATed to the tailnet target you set.
