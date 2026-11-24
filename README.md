@@ -1,6 +1,7 @@
 # tailscale-protonvpn
 
-[Tailscale's Mullvad exit nodes](https://tailscale.com/kb/1258/mullvad-exit-nodes), but with ProtonVPN.
+[Tailscale's Mullvad exit nodes](https://tailscale.com/kb/1258/mullvad-exit-nodes), but with ProtonVPN
+(not affiliated with Proton or Tailscale).
 Turn any Linux server into a Tailscale exit node that routes through ProtonVPN, so you can pick it on any
 of your devices and stay connected to your tailnet the whole time. No separate VPN app fighting with
 Tailscale for the network.
@@ -16,7 +17,8 @@ Tailscale for the network.
 
 - **Web dashboard**: see at a glance whether you're protected and which IP you exit from, browse
   servers on an interactive world map, filter by Secure Core / P2P / Streaming / Tor, measure
-  latency, and connect to the fastest server with one click.
+  latency, star favourite countries and servers (synced across your devices), and connect to the
+  fastest server with one click.
 - **Kill switch**: if the tunnel drops, exit-node traffic is blocked instead of leaking from the
   server's real IP. It's in place at boot before Tailscale starts. IPv6 can't bypass the VPN.
 - **Port forwarding** (NAT-PMP on P2P servers), auto-renewed. Forward it to the server itself or
