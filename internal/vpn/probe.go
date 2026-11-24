@@ -3,11 +3,14 @@ package vpn
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
 	"net"
 	"net/http"
+	"net/netip"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -92,24 +95,92 @@ func ipLookup(ctx context.Context, client *http.Client) ExitInfo {
 
 var pingMu sync.Mutex
 
-// Ping measures ICMP round-trip time from this host to each IP (over the
-// normal uplink, i.e. what the tunnel's outer packets will experience).
-func Ping(ips []string, rounds int, wait time.Duration) (map[string]float64, error) {
+const (
+	pingRounds    = 2                      // ICMP attempts per server
+	pingGap       = time.Millisecond       // between any two echoes
+	pingSubnetGap = 30 * time.Millisecond  // between echoes to the same /24
+	pingGrace     = 800 * time.Millisecond // wait for replies after the last echo
+	tcpTimeout    = 1500 * time.Millisecond
+	tcpParallel   = 32
+)
+
+// Ping measures the round-trip time from this host to each IP over the
+// normal uplink (what the tunnel's outer packets will experience).
+//
+// Proton rate-limits ICMP hard per machine, and one machine often owns dozens
+// of neighbouring entry IPs (Secure Core especially), so echoes are spread
+// across /24s and paced within each. Servers that still don't answer, or never
+// answer ICMP at all, are timed with a TCP connect to port 443 instead, if
+// tcpOK allows it. (Secure Core servers relay port 443 to the exit country, so
+// a handshake there measures the whole route, not the hop to the server.)
+func Ping(ips []string, tcpOK func(ip string) bool) (map[string]float64, error) {
 	pingMu.Lock()
 	defer pingMu.Unlock()
+	var v4, rest []string
+	for _, ip := range ips {
+		if a, err := netip.ParseAddr(ip); err == nil && a.Is4() {
+			v4 = append(v4, a.String())
+		} else if err == nil && tcpOK(ip) {
+			rest = append(rest, a.String())
+		}
+	}
+	best, err := pingICMP(v4)
+	if err != nil {
+		return nil, err
+	}
+	for _, ip := range v4 {
+		if _, ok := best[ip]; !ok && tcpOK(ip) {
+			rest = append(rest, ip)
+		}
+	}
+	for ip, ms := range pingTCP(rest) {
+		best[ip] = ms
+	}
+	return best, nil
+}
+
+// interleave orders IPs round-robin across their /24s so consecutive echoes
+// go to different machines.
+func interleave(ips []string) []string {
+	var keys []string
+	bySubnet := map[string][]string{}
+	for _, ip := range ips {
+		k := ip[:strings.LastIndexByte(ip, '.')]
+		if _, ok := bySubnet[k]; !ok {
+			keys = append(keys, k)
+		}
+		bySubnet[k] = append(bySubnet[k], ip)
+	}
+	out := make([]string, 0, len(ips))
+	for len(out) < len(ips) {
+		for _, k := range keys {
+			if l := bySubnet[k]; len(l) > 0 {
+				out = append(out, l[0])
+				bySubnet[k] = l[1:]
+			}
+		}
+	}
+	return out
+}
+
+func pingICMP(ips []string) (map[string]float64, error) {
+	best := map[string]float64{}
+	if len(ips) == 0 {
+		return best, nil
+	}
 	conn, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 
-	id := rand.IntN(0xffff)
-	var mu sync.Mutex
-	sent := map[int]struct {
+	type echo struct {
 		ip string
 		at time.Time
-	}{}
-	best := map[string]float64{}
+	}
+	id := rand.IntN(0xffff)
+	var mu sync.Mutex
+	sent := map[int]echo{}
 
 	done := make(chan struct{})
 	go func() {
@@ -125,13 +196,12 @@ func Ping(ips []string, rounds int, wait time.Duration) (map[string]float64, err
 			if err != nil || m.Type != ipv4.ICMPTypeEchoReply {
 				continue
 			}
-			echo, ok := m.Body.(*icmp.Echo)
-			if !ok || echo.ID != id {
+			e, ok := m.Body.(*icmp.Echo)
+			if !ok || e.ID != id {
 				continue
 			}
 			mu.Lock()
-			s, ok := sent[echo.Seq]
-			if ok && peer.String() == s.ip {
+			if s, ok := sent[e.Seq]; ok && peer.String() == s.ip {
 				ms := float64(now.Sub(s.at).Microseconds()) / 1000
 				if cur, ok := best[s.ip]; !ok || ms < cur {
 					best[s.ip] = ms
@@ -141,33 +211,68 @@ func Ping(ips []string, rounds int, wait time.Duration) (map[string]float64, err
 		}
 	}()
 
+	order := interleave(ips)
+	last := map[string]time.Time{}
+	next := time.Now()
 	seq := 0
-	for r := 0; r < rounds; r++ {
-		for _, ip := range ips {
-			dst, err := net.ResolveIPAddr("ip4", ip)
-			if err != nil {
-				continue
-			}
-			seq++
-			msg := icmp.Message{Type: ipv4.ICMPTypeEcho, Body: &icmp.Echo{ID: id, Seq: seq, Data: []byte("tailscale-protonvpn")}}
-			b, _ := msg.Marshal(nil)
+	for r := 0; r < pingRounds; r++ {
+		for _, ip := range order {
 			mu.Lock()
-			sent[seq] = struct {
-				ip string
-				at time.Time
-			}{ip, time.Now()}
+			_, answered := best[ip]
 			mu.Unlock()
-			conn.WriteTo(b, dst)
-			time.Sleep(2 * time.Millisecond)
+			if answered {
+				continue // later rounds are retries for the silent ones
+			}
+			k := ip[:strings.LastIndexByte(ip, '.')]
+			if t := last[k].Add(pingSubnetGap); t.After(next) {
+				next = t
+			}
+			time.Sleep(time.Until(next))
+			seq = (seq + 1) & 0xffff
+			b, _ := (&icmp.Message{Type: ipv4.ICMPTypeEcho, Body: &icmp.Echo{ID: id, Seq: seq, Data: []byte("tailscale-protonvpn")}}).Marshal(nil)
+			mu.Lock()
+			sent[seq] = echo{ip, time.Now()}
+			mu.Unlock()
+			conn.WriteTo(b, &net.IPAddr{IP: net.ParseIP(ip)})
+			last[k] = time.Now()
+			next = last[k].Add(pingGap)
 		}
-		time.Sleep(wait / time.Duration(rounds))
 	}
-	time.Sleep(wait / 2)
+	time.Sleep(pingGrace)
 	conn.Close()
 	<-done
 	mu.Lock()
 	defer mu.Unlock()
 	return best, nil
+}
+
+// pingTCP times a TCP handshake to port 443. A refusal is a reply too.
+func pingTCP(ips []string) map[string]float64 {
+	var mu sync.Mutex
+	res := map[string]float64{}
+	sem := make(chan struct{}, tcpParallel)
+	var wg sync.WaitGroup
+	for _, ip := range ips {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer func() { <-sem; wg.Done() }()
+			d := net.Dialer{Timeout: tcpTimeout}
+			start := time.Now()
+			c, err := d.Dial("tcp", net.JoinHostPort(ip, "443"))
+			rtt := time.Since(start)
+			if err == nil {
+				c.Close()
+			} else if !errors.Is(err, syscall.ECONNREFUSED) {
+				return
+			}
+			mu.Lock()
+			res[ip] = float64(rtt.Microseconds()) / 1000
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	return res
 }
 
 // dialTunnel opens a connection that is routed through the tunnel.

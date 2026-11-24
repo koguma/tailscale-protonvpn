@@ -303,13 +303,23 @@ func (c *Controller) pfLoop(ctx context.Context) {
 	}
 }
 
+// exitIPLoop looks up the public IP seen through the tunnel. Lookups right
+// after a (re)connect can fail while the tunnel settles, so failures are
+// retried quickly (5s, 10s, 20s, 40s, then every minute) instead of waiting
+// for the regular 5-minute refresh.
 func (c *Controller) exitIPLoop(ctx context.Context) {
+	fails := 0
 	for {
+		wait := 5 * time.Minute
+		if fails > 0 {
+			wait = min(5*time.Second<<(fails-1), time.Minute)
+		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(5 * time.Minute):
+		case <-time.After(wait):
 		case <-c.kickIP:
+			fails = 0
 			time.Sleep(time.Second)
 		}
 		if c.Status().Phase != "connected" {
@@ -318,12 +328,28 @@ func (c *Controller) exitIPLoop(ctx context.Context) {
 		cctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 		info := vpn.CheckExit(cctx)
 		cancel()
+		if info.Error != "" {
+			fails = min(fails+1, 5)
+		} else {
+			fails = 0
+		}
 		c.mu.Lock()
 		if c.status.Phase == "connected" {
-			c.status.Exit = &info
+			c.status.Exit = mergeExit(c.status.Exit, info)
 		}
 		c.mu.Unlock()
 	}
+}
+
+// mergeExit keeps the last good lookup (for the current server; it is
+// cleared on server change) when a recheck fails, noting the error.
+func mergeExit(prev *vpn.ExitInfo, next vpn.ExitInfo) *vpn.ExitInfo {
+	if next.Error != "" && prev != nil && prev.IP != "" {
+		kept := *prev
+		kept.Error = next.Error
+		return &kept
+	}
+	return &next
 }
 
 func (c *Controller) RecheckExit() { poke(c.kickIP) }

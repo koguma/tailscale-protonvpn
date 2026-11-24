@@ -65,6 +65,16 @@ func parseCatalog(b []byte) ([]Server, time.Time, error) {
 	if err := json.Unmarshal(b, &raw); err != nil {
 		return nil, time.Time{}, err
 	}
+	// The dump lists many servers twice, once per address family. Both are
+	// the same machine (same key), so keep only the IPv4 entry.
+	hasV4 := map[string]bool{}
+	for _, r := range raw.Servers {
+		for _, ip := range r.IPs {
+			if !strings.Contains(ip, ":") {
+				hasV4[r.WGPubKey] = true
+			}
+		}
+	}
 	seen := map[string]bool{}
 	var out []Server
 	for _, r := range raw.Servers {
@@ -72,7 +82,7 @@ func parseCatalog(b []byte) ([]Server, time.Time, error) {
 			continue
 		}
 		for _, ip := range r.IPs {
-			if seen[ip] {
+			if seen[ip] || strings.Contains(ip, ":") && hasV4[r.WGPubKey] {
 				continue
 			}
 			seen[ip] = true

@@ -42,7 +42,9 @@ func TestParseCatalog(t *testing.T) {
 	  {"vpn":"wireguard","country":"Switzerland","city":"Zurich","server_name":"CH#2","hostname":"ch-02","wgpubkey":"k2","stream":true,"ips":["1.1.1.2","1.1.1.3"]},
 	  {"vpn":"wireguard","country":"Austria","city":"Vienna","server_name":"AT#1","hostname":"at-01","wgpubkey":"k3","ips":["1.1.1.10"]},
 	  {"vpn":"wireguard","country":"United States","city":"Chicago","server_name":"CH-US#1","hostname":"sc","wgpubkey":"k4","secure_core":true,"ips":["2.2.2.2"]},
-	  {"vpn":"wireguard","country":"France","server_name":"FR#1","hostname":"nokey","ips":["3.3.3.3"]}
+	  {"vpn":"wireguard","country":"France","server_name":"FR#1","hostname":"nokey","ips":["3.3.3.3"]},
+	  {"vpn":"wireguard","country":"Switzerland","city":"Zurich","server_name":"CH#10","hostname":"ch-10","wgpubkey":"k1","ips":["2001:db8::10"]},
+	  {"vpn":"wireguard","country":"Germany","city":"Berlin","server_name":"DE#1","hostname":"de-01","wgpubkey":"k5","ips":["2001:db8::de"]}
 	]}`
 	s, ts, err := parseCatalog([]byte(raw))
 	if err != nil {
@@ -56,8 +58,9 @@ func TestParseCatalog(t *testing.T) {
 		names = append(names, x.Name+"@"+x.IP)
 	}
 	// openvpn and key-less entries dropped; the duplicate IP keeps its first
-	// owner (CH#10); sorted by country, then naturally by name.
-	want := []string{"CH#2@1.1.1.2", "CH#2@1.1.1.3", "CH#10@1.1.1.10", "CH-US#1@2.2.2.2"}
+	// owner (CH#10); the IPv6 twin of CH#10 is dropped but an IPv6-only
+	// server is kept; sorted by country, then naturally by name.
+	want := []string{"DE#1@2001:db8::de", "CH#2@1.1.1.2", "CH#2@1.1.1.3", "CH#10@1.1.1.10", "CH-US#1@2.2.2.2"}
 	if len(names) != len(want) {
 		t.Fatalf("servers = %v, want %v", names, want)
 	}

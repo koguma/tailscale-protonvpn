@@ -5,6 +5,8 @@ import (
 	"net/netip"
 	"testing"
 	"time"
+
+	"github.com/koguma/tailscale-protonvpn/internal/vpn"
 )
 
 func TestTunnelPhase(t *testing.T) {
@@ -110,5 +112,19 @@ func TestDesiredNetExtras(t *testing.T) {
 		if d := desiredNet(off, healthy, 40000, 1); d.DNS || d.DNSBlock || (healthy && d.PFPort != 0) {
 			t.Errorf("features off (healthy=%v): %+v", healthy, d)
 		}
+	}
+}
+
+func TestMergeExit(t *testing.T) {
+	good := vpn.ExitInfo{IP: "203.0.113.7", Country: "JP"}
+	bad := vpn.ExitInfo{Error: "lookup ipinfo.io: i/o timeout"}
+	if got := mergeExit(nil, bad); got.IP != "" || got.Error == "" {
+		t.Errorf("first failure: %+v", got)
+	}
+	if got := mergeExit(&good, bad); got.IP != good.IP || got.Error != bad.Error {
+		t.Errorf("failed recheck should keep the last IP: %+v", got)
+	}
+	if got := mergeExit(&vpn.ExitInfo{IP: "203.0.113.7", Error: "x"}, good); got.Error != "" {
+		t.Errorf("success should clear the error: %+v", got)
 	}
 }

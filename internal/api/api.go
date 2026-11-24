@@ -241,24 +241,22 @@ func (a *api) ping(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		IDs []string `json:"ids"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<17)).Decode(&req); err != nil {
 		writeErr(w, 400, err)
 		return
 	}
-	if len(req.IDs) > 200 {
-		req.IDs = req.IDs[:200]
+	if len(req.IDs) > 2000 {
+		req.IDs = req.IDs[:2000]
 	}
 	var ips []string
+	secureCore := map[string]bool{}
 	for _, id := range req.IDs {
 		if s, ok := a.cat.Get(id); ok {
 			ips = append(ips, s.IP)
+			secureCore[s.IP] = s.SecureCore
 		}
 	}
-	rounds := 3
-	if len(ips) > 80 {
-		rounds = 2
-	}
-	res, err := vpn.Ping(ips, rounds, 1500*time.Millisecond)
+	res, err := vpn.Ping(ips, func(ip string) bool { return !secureCore[ip] })
 	if err != nil {
 		writeErr(w, 500, fmt.Errorf("ping: %w", err))
 		return
