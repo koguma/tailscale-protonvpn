@@ -43,6 +43,7 @@ func New(ctl *controller.Controller, cat *controller.Catalog, users []string, ve
 	mux.HandleFunc("POST /api/key", a.setKey)
 	mux.HandleFunc("DELETE /api/key", a.deleteKey)
 	mux.HandleFunc("POST /api/ping", a.ping)
+	mux.HandleFunc("POST /api/favorites", a.setFavorite)
 	mux.HandleFunc("POST /api/catalog/refresh", a.refreshCatalog)
 	mux.HandleFunc("POST /api/exit/recheck", func(w http.ResponseWriter, r *http.Request) {
 		a.ctl.RecheckExit()
@@ -101,7 +102,7 @@ func (a *api) status(w http.ResponseWriter, r *http.Request) {
 		"state": map[string]any{
 			"enabled": st.Enabled, "killSwitch": st.KillSwitch, "dnsViaVPN": st.DNSViaVPN,
 			"portForward": st.PortForward, "pfTarget": st.PFTarget, "pfTargetPort": st.PFTargetPort,
-			"server": st.Server, "key": kv,
+			"server": st.Server, "key": kv, "favorites": st.Favorites,
 		},
 		"status":  a.ctl.Status(),
 		"catalog": a.cat.Meta(),
@@ -262,6 +263,43 @@ func (a *api) ping(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, res) // keyed by IP == server ID
+}
+
+const maxFavorites = 500
+
+// setFavorite stars or unstars one country ("cc:JP") or server ("srv:JP#367").
+func (a *api) setFavorite(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Key string `json:"key"`
+		On  bool   `json:"on"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<12)).Decode(&req); err != nil {
+		writeErr(w, 400, err)
+		return
+	}
+	kind, val, _ := strings.Cut(req.Key, ":")
+	if (kind != "cc" && kind != "srv") || val == "" || len(req.Key) > 64 {
+		writeErr(w, 400, errors.New(`favorite must look like "cc:JP" or "srv:JP#367"`))
+		return
+	}
+	err := a.ctl.Patch(func(st *controller.State) error {
+		i := slices.Index(st.Favorites, req.Key)
+		switch {
+		case req.On && i < 0:
+			if len(st.Favorites) >= maxFavorites {
+				return fmt.Errorf("at most %d favorites", maxFavorites)
+			}
+			st.Favorites = append(st.Favorites, req.Key)
+		case !req.On && i >= 0:
+			st.Favorites = slices.Delete(st.Favorites, i, i+1)
+		}
+		return nil
+	})
+	if err != nil {
+		writeErr(w, 400, err)
+		return
+	}
+	writeJSON(w, map[string]any{"favorites": a.ctl.State().Favorites})
 }
 
 func (a *api) refreshCatalog(w http.ResponseWriter, r *http.Request) {

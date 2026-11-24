@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -176,6 +177,37 @@ func TestAPIValidation(t *testing.T) {
 	}
 	if rec, _ := do(t, h, "POST", "/api/state", `{"pfTarget":""}`, nil); rec.Code != 200 || c.State().PFTarget != "" {
 		t.Error("clearing the forward target failed")
+	}
+}
+
+func TestAPIFavorites(t *testing.T) {
+	h, env := newTestAPI(t)
+	for _, body := range []string{`{"key":"JP","on":true}`, `{"key":"cc:","on":true}`, `{"key":"x:JP","on":true}`} {
+		if rec, _ := do(t, h, "POST", "/api/favorites", body, nil); rec.Code != 400 {
+			t.Errorf("%s: %d, want 400", body, rec.Code)
+		}
+	}
+	for _, body := range []string{
+		`{"key":"cc:JP","on":true}`,
+		`{"key":"srv:JP#367","on":true}`,
+		`{"key":"cc:JP","on":true}`, // idempotent
+		`{"key":"cc:CH","on":true}`,
+		`{"key":"cc:JP","on":false}`,
+	} {
+		if rec, _ := do(t, h, "POST", "/api/favorites", body, nil); rec.Code != 200 {
+			t.Fatalf("%s: %d", body, rec.Code)
+		}
+	}
+	want := []string{"srv:JP#367", "cc:CH"}
+	if got := env.State().Favorites; !slices.Equal(got, want) {
+		t.Errorf("favorites = %v, want %v", got, want)
+	}
+	if st, _ := env.store.Load(); !slices.Equal(st.Favorites, want) {
+		t.Errorf("persisted favorites = %v, want %v", st.Favorites, want)
+	}
+	_, m := do(t, h, "GET", "/api/status", "", nil)
+	if f, _ := m["state"].(map[string]any)["favorites"].([]any); len(f) != 2 {
+		t.Errorf("status favorites = %v", m["state"])
 	}
 }
 

@@ -178,6 +178,10 @@
       height: 19px
     }
 
+    .grab {
+      display: none
+    }
+
     .search {
       margin: 0 16px;
       display: flex;
@@ -210,24 +214,47 @@
 
     .tabs {
       display: flex;
-      gap: 4px;
-      padding: 12px 16px 4px;
+      gap: 2px;
+      margin: 12px 16px 4px;
+      padding: 3px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
       overflow-x: auto;
       scrollbar-width: none
     }
 
     .tab {
+      flex: 1 1 auto;
+      position: relative;
       background: none;
-      border: 0;
+      border: 1px solid transparent;
       color: var(--weak);
-      padding: 6px 9px;
-      font-size: 13.5px;
-      border-radius: 8px;
+      padding: 5px 4px;
+      font-size: 12.5px;
+      border-radius: 7px;
       white-space: nowrap;
       font-weight: 500;
       display: flex;
-      gap: 6px;
-      align-items: center
+      justify-content: center;
+      align-items: center;
+      transition: background .15s, color .15s, border-color .15s
+    }
+
+    /* dividers between unselected tabs */
+    .tab+.tab::before {
+      content: "";
+      position: absolute;
+      left: -2px;
+      top: 25%;
+      height: 50%;
+      width: 1px;
+      background: var(--border)
+    }
+
+    .tab[aria-selected=true]::before,
+    .tab[aria-selected=true]+.tab::before {
+      display: none
     }
 
     .tab:hover {
@@ -237,7 +264,13 @@
 
     .tab[aria-selected=true] {
       background: var(--primary-soft);
-      color: #b7a5ff
+      border-color: rgba(124, 92, 255, .55);
+      color: #c9bbff
+    }
+
+    .tab:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 1px
     }
 
     .list-head {
@@ -275,6 +308,7 @@
     .clist {
       flex: 1;
       overflow-y: auto;
+      overflow-anchor: none;
       padding: 0 8px 16px;
       min-height: 0
     }
@@ -288,20 +322,42 @@
       border-radius: 8px
     }
 
-    .crow {
+    /* Country and server rows share one set of columns:
+       [flag] name … | latency | star | power | chevron (or spacer) */
+    .crow,
+    .srow {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       padding: 0 8px;
-      height: 48px;
       border-radius: 8px;
       cursor: pointer;
       position: relative
     }
 
+    .crow {
+      height: 48px
+    }
+
+    .srow {
+      height: 44px
+    }
+
     .crow:hover,
-    .crow.open {
+    .crow.open,
+    .srow:hover {
       background: var(--hover)
+    }
+
+    /* The connected country keeps a tint (its button hides while open); the
+       connected server is marked by its green button alone. */
+    .crow.cur {
+      background: rgba(30, 168, 133, .1)
+    }
+
+    .crow.cur:hover,
+    .crow.cur.open {
+      background: rgba(30, 168, 133, .16)
     }
 
     .cname {
@@ -319,22 +375,27 @@
       margin-left: 6px
     }
 
-    .cname .on {
-      color: var(--ok-bright);
-      font-size: 12px;
-      font-weight: 600;
-      margin-left: 6px
+    .feats {
+      display: inline-flex;
+      gap: 4px;
+      margin-left: 7px;
+      color: var(--hint);
+      vertical-align: -2px
     }
 
-    .feats {
-      display: flex;
-      gap: 6px;
-      color: var(--hint)
+    .feats:empty {
+      display: none
     }
 
     .feats svg.i {
-      width: 15px;
-      height: 15px
+      width: 13px;
+      height: 13px
+    }
+
+    .chev,
+    .chev-pad {
+      width: 16px;
+      flex: none
     }
 
     .chev {
@@ -346,73 +407,83 @@
       transform: rotate(180deg)
     }
 
-    .cbtn {
-      display: none;
-      background: var(--card-2);
+    .pbtn {
+      width: 32px;
+      height: 32px;
+      flex: none;
+      border-radius: 50%;
       border: 1px solid var(--border);
+      background: var(--card-2);
+      color: var(--hint);
+      display: grid;
+      place-items: center;
+      transition: background .15s, border-color .15s, color .15s, opacity .15s, visibility .15s
+    }
+
+    /* An open country lists its servers, each with its own button; the
+       country's button fades out but keeps its space so nothing shifts. */
+    .crow.open .pbtn {
+      opacity: 0;
+      visibility: hidden
+    }
+
+    .pbtn svg.i {
+      width: 15px;
+      height: 15px;
+      stroke-width: 2.3
+    }
+
+    .crow:hover .pbtn,
+    .srow:hover .pbtn {
       color: var(--text);
-      border-radius: 8px;
-      padding: 5px 12px;
-      font-weight: 600;
-      font-size: 13px
+      border-color: #4a4760
     }
 
-    .cbtn:hover {
+    .pbtn:hover,
+    .crow:hover .pbtn:hover,
+    .srow:hover .pbtn:hover {
+      background: var(--primary);
       border-color: var(--primary);
-      background: var(--primary)
-    }
-
-    .cbtn.dis {
-      background: transparent;
-      border-color: var(--bad);
-      color: var(--bad)
-    }
-
-    .cbtn.dis:hover {
-      background: var(--bad);
       color: #fff
     }
 
-    .crow:hover .cbtn,
-    .srow:hover .cbtn,
-    .cbtn.show {
-      display: inline-block
+    .pbtn.on,
+    .crow:hover .pbtn.on,
+    .srow:hover .pbtn.on {
+      background: rgba(30, 168, 133, .2);
+      border-color: rgba(46, 230, 176, .55);
+      color: var(--ok-bright)
     }
 
-    .crow:hover .feats {
-      display: none
+    .pbtn.on:hover,
+    .crow:hover .pbtn.on:hover,
+    .srow:hover .pbtn.on:hover {
+      background: var(--bad);
+      border-color: var(--bad);
+      color: #fff
     }
 
-    @media (hover:none) {
-      .cbtn {
-        display: inline-block
-      }
-
-      .crow .feats {
-        display: none
-      }
+    .pbtn:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px
     }
 
     .servers {
-      padding: 2px 0 8px 44px
+      padding: 2px 0 8px
     }
 
-    .srow {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      height: 44px;
-      padding: 0 8px;
-      border-radius: 8px;
-      cursor: pointer
+    /* Indent inside the row (not the list), so highlights span the full
+       width while names line up with country names (flag 24 + gap 10). */
+    .servers .srow {
+      padding-left: 42px
     }
 
-    .srow:hover {
-      background: var(--hover)
+    .servers.flat .srow {
+      padding-left: 8px
     }
 
-    .srow.cur {
-      background: rgba(30, 168, 133, .1)
+    .servers.anim {
+      overflow: hidden
     }
 
     .sname {
@@ -426,7 +497,7 @@
       line-height: 1.2
     }
 
-    .sname span {
+    .sname>span {
       color: var(--hint);
       font-size: 12px;
       white-space: nowrap;
@@ -435,13 +506,24 @@
       display: block
     }
 
+    .sname .feats {
+      margin-left: 5px;
+      vertical-align: -1px
+    }
+
+    .sname .feats svg.i {
+      width: 12px;
+      height: 12px
+    }
+
     .lat {
       display: flex;
       align-items: center;
       gap: 6px;
       color: var(--weak);
       font-size: 12px;
-      min-width: 56px;
+      width: 60px;
+      flex: none;
       justify-content: flex-end
     }
 
@@ -464,10 +546,6 @@
       background: var(--bad)
     }
 
-    .srow:hover .lat {
-      display: none
-    }
-
     .more {
       display: block;
       margin: 6px auto;
@@ -483,6 +561,67 @@
       text-align: center;
       padding: 40px 16px
     }
+
+    .lat.none {
+      color: var(--hint)
+    }
+
+    /* always takes its space (only fades in), so it never shifts the row */
+    .star {
+      background: none;
+      border: 0;
+      color: var(--hint);
+      width: 28px;
+      height: 28px;
+      margin: 0 -4px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      flex: none;
+      opacity: 0;
+      transition: opacity .12s
+    }
+
+    .star:hover {
+      color: var(--text);
+      background: var(--card-2)
+    }
+
+    .star.on {
+      color: #ffc94d
+    }
+
+    .star.on svg.i {
+      fill: currentColor
+    }
+
+    .star.on,
+    .crow:hover .star,
+    .srow:hover .star,
+    .star:focus-visible {
+      opacity: 1
+    }
+
+    @media (hover:none) {
+      .star {
+        opacity: 1
+      }
+    }
+
+    .sub-head {
+      padding: 12px 8px 4px;
+      color: var(--hint);
+      font-size: 11.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .04em
+    }
+
+    .servers.flat {
+      padding: 0
+    }
+
+
 
     /* ---------- main / map ---------- */
     .main {
@@ -515,7 +654,7 @@
 
     .status {
       position: absolute;
-      top: 28px;
+      top: 56px;
       left: 0;
       right: 0;
       text-align: center;
@@ -755,7 +894,7 @@
       min-width: 0
     }
 
-    .cs span {
+    .cs>span {
       display: block;
       font-size: 11.5px;
       color: var(--hint)
@@ -1137,14 +1276,15 @@
     /* ---------- mobile ---------- */
     @media (max-width:900px) {
       body {
-        overflow: auto
+        overflow: hidden
       }
 
       .app {
         display: flex;
         flex-direction: column;
-        height: auto;
-        min-height: 100dvh
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden
       }
 
       .top {
@@ -1156,41 +1296,134 @@
         order: 1;
         height: auto;
         min-height: 0;
-        padding: 64px 0 16px;
+        padding: 84px 0 16px;
         overflow: visible
       }
 
+      /* the server list is a bottom sheet: it peeks below the card and
+         drags up over it; only the list inside it scrolls */
       .side {
-        order: 2
+        order: 2;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 5;
+        height: 70vh;
+        border-radius: 18px 18px 0 0;
+        box-shadow: 0 -14px 40px rgba(0, 0, 0, .5);
+        transform: translateY(40vh);
+        transition: transform .34s cubic-bezier(.2, 0, 0, 1);
+        will-change: transform
+      }
+
+      .side.dragging {
+        transition: none
+      }
+
+      .grab {
+        display: flex;
+        justify-content: center;
+        padding: 8px 0 12px;
+        touch-action: none;
+        cursor: grab;
+        outline: none
+      }
+
+      .grab i {
+        width: 38px;
+        height: 4px;
+        border-radius: 2px;
+        background: #4a4760
+      }
+
+      .grab:focus-visible i {
+        background: var(--primary)
       }
 
       #map {
         position: relative;
-        height: 230px;
+        height: clamp(80px, calc(100dvh - 620px), 170px);
         inset: auto
       }
 
       .status {
-        top: 8px
+        top: 22px
       }
 
       .btn {
         font-size: 14px;
-        padding: 11px 10px;
+        padding: 9px 10px;
+        border-radius: 9px;
         white-space: nowrap
       }
 
+      /* compact card: the server list matters more on a phone */
       .conn {
         position: relative;
         left: auto;
         bottom: auto;
         transform: none;
         margin: 0 16px;
-        width: auto
+        width: auto;
+        padding: 12px;
+        border-radius: 14px
+      }
+
+      .conn-top {
+        gap: 10px
+      }
+
+      .flag.lg {
+        width: 28px;
+        height: 21px;
+        border-radius: 3px
+      }
+
+      .conn-title b {
+        font-size: 15px
+      }
+
+      .conn-title span {
+        font-size: 12px
       }
 
       .conn-stats {
-        grid-template-columns: repeat(2, 1fr)
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+        margin-top: 10px
+      }
+
+      .cs {
+        padding: 5px 7px;
+        border-radius: 8px
+      }
+
+      .cs>span {
+        font-size: 10.5px
+      }
+
+      .cs b {
+        font-size: 12.5px
+      }
+
+      .cs .pill {
+        padding: 0 5px;
+        font-size: 11px
+      }
+
+      .cs .cs-long {
+        display: none
+      }
+
+      .conn-actions {
+        margin-top: 10px
+      }
+
+      .alert {
+        margin-top: 8px;
+        padding: 7px 10px;
+        font-size: 12.5px
       }
 
       .side {
@@ -1199,9 +1432,22 @@
       }
 
       .clist {
-        overflow: visible
+        overscroll-behavior: contain;
+        padding-bottom: calc(16px + env(safe-area-inset-bottom))
+      }
+
+      .side:not(.expanded) .clist {
+        overflow: hidden
       }
     }
+
+    @media (min-width:901px) {
+      .cs .cs-short {
+        display: none
+      }
+    }
+
+
   </style>
 </head>
 
@@ -1262,6 +1508,9 @@
         <circle cx="12" cy="12" r="9" />
         <path d="M12 7v6M12 16.5v.5" />
       </symbol>
+      <symbol id="i-star" viewBox="0 0 24 24">
+        <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z" />
+      </symbol>
       <symbol id="i-gauge" viewBox="0 0 24 24">
         <path d="M4 18a9 9 0 1 1 16 0" />
         <path d="m12 14 4-5" />
@@ -1270,7 +1519,7 @@
   </svg>
 
   <div class="app" id="app">
-    <header class="top side-head">
+    <header class="top side-head" id="top">
       <div class="logo">
         <svg viewBox="0 0 32 32" aria-hidden="true">
           <defs>
@@ -1289,12 +1538,14 @@
           <use href="#i-gear" />
         </svg></button>
     </header>
-    <aside class="side">
+    <aside class="side" id="side">
+      <div class="grab" id="grab" role="button" tabindex="0" aria-label="Expand server list"><i></i></div>
       <label class="search"><svg class="i">
           <use href="#i-search" />
         </svg><input id="q" type="search" placeholder="Search countries, cities or servers" aria-label="Search"></label>
       <div class="tabs" role="tablist" id="tabs">
         <button class="tab" role="tab" data-t="all" aria-selected="true">All</button>
+        <button class="tab" role="tab" data-t="fav" aria-selected="false">Favourites</button>
         <button class="tab" role="tab" data-t="secureCore" aria-selected="false">Secure Core</button>
         <button class="tab" role="tab" data-t="p2p" aria-selected="false">P2P</button>
         <button class="tab" role="tab" data-t="streaming" aria-selected="false">Streaming</button>
@@ -1303,7 +1554,7 @@
       <div class="list-head"><span id="listTitle">All countries</span><button id="measureAll"
           title="Measure latency to each country"><svg class="i">
             <use href="#i-gauge" />
-          </svg>Measure</button></div>
+          </svg><span>Measure</span></button></div>
       <div class="clist" id="clist" role="list"></div>
     </aside>
 
@@ -1330,7 +1581,7 @@
           <div class="cs"><span>Download</span><b class="num" id="csDown">—</b></div>
           <div class="cs"><span>Upload</span><b class="num" id="csUp">—</b></div>
           <div class="cs"><span>Session</span><b class="num" id="csTime">—</b></div>
-          <div class="cs"><span>Forwarded port</span><b class="num" id="csPort">—</b></div>
+          <div class="cs"><span><span class="cs-long">Forwarded port</span><span class="cs-short">Port</span></span><b class="num" id="csPort">—</b></div>
         </div>
         <div id="alerts"></div>
         <div class="conn-actions">
@@ -1453,6 +1704,10 @@
     const flagImg = (cc, cls = "flag") => `<img class="${cls}" src="${flagSrc(cc)}" alt="" loading="lazy">`;
 
     let S = null, servers = [], lat = {}, tab = "all", openCC = null, limits = {}, editingKey = false, busy = false;
+    // lat[id]: ms, or null when the server didn't answer; latAt[id]: when measured.
+    let latAt = {}, pendingIds = new Set(), inflight = 0;
+    // Starred "cc:JP" / "srv:JP#367" keys, kept on the server so they follow you across devices.
+    let favs = new Set(), favBusy = 0, favChangedAt = 0;
     let lastBytes = null, rates = { down: 0, up: 0 };
 
     async function api(path, opts = {}) {
@@ -1474,14 +1729,22 @@
 
     /* ---------------- filtering ---------------- */
     function tabFilter(s) {
+      if (tab === "fav") return favs.has("cc:" + s.cc) && !s.secureCore && !s.tor;
       if (tab === "secureCore") return s.secureCore;
       if (s.secureCore) return false;
       if (tab === "all") return !s.tor;
       return !!s[tab];
     }
+    const query = () => $("q").value.trim().toLowerCase();
+    const matches = (s, q) => !q || `${s.name} ${s.city} ${s.country} ${s.hostname} ${s.cc}`.toLowerCase().includes(q);
     function visibleServers() {
-      const q = $("q").value.trim().toLowerCase();
-      return servers.filter(s => tabFilter(s) && (!q || `${s.name} ${s.city} ${s.country} ${s.hostname} ${s.cc}`.toLowerCase().includes(q)));
+      const q = query();
+      return servers.filter(s => tabFilter(s) && matches(s, q));
+    }
+    // Starred servers, listed on their own in the Favourites tab.
+    function favServers() {
+      const q = query();
+      return servers.filter(s => favs.has("srv:" + s.name) && matches(s, q));
     }
     function groups(list) {
       const m = new Map();
@@ -1489,46 +1752,72 @@
       return [...m.values()].sort((a, b) => a.country.localeCompare(b.country));
     }
     const bestLat = g => { let b = null; for (const s of g.servers) { const l = lat[s.id]; if (l != null && (b == null || l < b)) b = l; } return b; };
+    // Not measured yet, or measured without a reply a while ago (worth retrying).
+    const stale = id => !pendingIds.has(id) && (!(id in lat) || (lat[id] == null && Date.now() - latAt[id] > 30000));
 
     /* ---------------- country list ---------------- */
+    function starBtn(key) {
+      const on = favs.has(key);
+      return `<button class="star${on ? " on" : ""}" data-act="fav" data-key="${esc(key)}" aria-pressed="${on}" title="${on ? "Remove from favourites" : "Add to favourites"}" aria-label="Favourite">${ico("star")}</button>`;
+    }
+    function latSpan(id) {
+      if (!(id in lat)) return `<span class="lat num">${pendingIds.has(id) ? "…" : ""}</span>`;
+      const l = lat[id];
+      return l == null ? `<span class="lat none num" title="No reply">—</span>` : `<span class="lat ${latClass(l)} num"><i></i>${l.toFixed(0)} ms</span>`;
+    }
+    const powerBtn = (act, attrs, label, on) => `<button class="pbtn${on ? " on" : ""}" data-act="${act}" ${attrs} title="${esc(label)}" aria-label="${esc(label)}">${ico("power")}</button>`;
+    function serverRow(s, cur, withFlag) {
+      const isS = cur && cur.id === s.id;
+      const where = withFlag ? [s.city, s.country].filter(Boolean).join(", ") : s.city || s.country;
+      return `<div class="srow${isS ? " cur" : ""}" data-id="${esc(s.id)}">
+          ${withFlag ? flagImg(s.cc) : ""}
+          <div class="sname"><b>${esc(s.name)}</b><span>${esc(where)}${s.secureCore ? " · via " + esc(s.name.split("-")[0]) : ""}<span class="feats">${s.p2p ? ico("p2p") : ""}${s.streaming ? ico("play") : ""}${s.tor ? ico("tor") : ""}</span></span></div>
+          ${latSpan(s.id)}
+          ${starBtn("srv:" + s.name)}
+          ${isS ? powerBtn("disconnect", "", "Disconnect", true) : powerBtn("server", `data-id="${esc(s.id)}"`, "Connect to " + s.name)}
+          <span class="chev-pad"></span>
+        </div>`;
+    }
+    // Re-rendering mid-animation would cut it short, so wait for it to finish.
+    const running = new Set();
+    let renderDeferred = false;
+    const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
     function renderList() {
+      if (running.size) { renderDeferred = true; return; }
       const list = visibleServers(), gs = groups(list), q = $("q").value.trim();
+      const fs = tab === "fav" ? favServers() : [];
       const cur = S && S.state.enabled && S.state.server ? S.state.server : null;
-      const titles = { all: "All countries", secureCore: "Secure Core countries", p2p: "P2P countries", streaming: "Streaming countries", tor: "Tor countries" };
-      $("listTitle").textContent = `${titles[tab]} (${gs.length})`;
+      const titles = { all: "All countries", fav: "Favourites", secureCore: "Secure Core countries", p2p: "P2P countries", streaming: "Streaming countries", tor: "Tor countries" };
+      $("listTitle").textContent = `${titles[tab]} (${gs.length + fs.length})`;
       let h = "";
+      if (fs.length) {
+        h += `<div class="sub-head">Servers</div><div class="servers flat">${fs.map(s => serverRow(s, cur, true)).join("")}</div>`;
+        if (gs.length) h += `<div class="sub-head">Countries</div>`;
+      }
       for (const g of gs) {
         const open = openCC === g.cc || (q && gs.length <= 3);
         const isCur = cur && cur.cc === g.cc;
         const f = { p2p: g.servers.some(s => s.p2p), tor: g.servers.some(s => s.tor), streaming: g.servers.some(s => s.streaming) };
         const bl = bestLat(g);
-        h += `<div class="crow${open ? " open" : ""}" data-cc="${esc(g.cc)}" role="listitem" tabindex="0">
+        h += `<div class="crow${open ? " open" : ""}${isCur ? " cur" : ""}" data-cc="${esc(g.cc)}" role="listitem" tabindex="0">
       ${flagImg(g.cc)}
-      <div class="cname">${esc(g.country)}${isCur ? '<span class="on">● Connected</span>' : `<small>${g.servers.length}</small>`}</div>
-      ${bl != null ? `<span class="lat ${latClass(bl)} num"><i></i>${bl.toFixed(0)} ms</span>` : ""}
-      <span class="feats">${f.p2p ? ico("p2p") : ""}${f.streaming ? ico("play") : ""}${f.tor ? ico("tor") : ""}</span>
-      ${isCur ? `<button class="cbtn dis" data-act="disconnect">Disconnect</button>` : `<button class="cbtn" data-act="country" data-cc="${esc(g.cc)}">Connect</button>`}
+      <div class="cname">${esc(g.country)}<small>${g.servers.length}</small><span class="feats">${f.p2p ? ico("p2p") : ""}${f.streaming ? ico("play") : ""}${f.tor ? ico("tor") : ""}</span></div>
+      <span class="lat ${latClass(bl)} num">${bl != null ? `<i></i>${bl.toFixed(0)} ms` : ""}</span>
+      ${starBtn("cc:" + g.cc)}
+      ${isCur ? powerBtn("disconnect", "", "Disconnect", true) : powerBtn("country", `data-cc="${esc(g.cc)}"`, "Connect to the fastest server in " + g.country)}
       <svg class="i chev"><use href="#i-chev"/></svg>
     </div>`;
         if (open) {
-          let ss = [...g.servers];
-          if (ss.some(s => lat[s.id] != null)) ss.sort((a, b) => (lat[a.id] ?? 1e9) - (lat[b.id] ?? 1e9));
-          const lim = limits[g.cc] || 40;
-          h += `<div class="servers">`;
-          for (const s of ss.slice(0, lim)) {
-            const isS = cur && cur.id === s.id, l = lat[s.id];
-            h += `<div class="srow${isS ? " cur" : ""}" data-id="${esc(s.id)}">
-          <div class="sname"><b>${esc(s.name)}</b><span>${esc(s.city || s.country)}${s.secureCore ? " · via " + esc(s.name.split("-")[0]) : ""}</span></div>
-          <span class="feats">${s.p2p ? ico("p2p") : ""}${s.streaming ? ico("play") : ""}${s.tor ? ico("tor") : ""}</span>
-          <span class="lat ${latClass(l)} num">${l != null ? `<i></i>${l.toFixed(0)} ms` : ""}</span>
-          ${isS ? `<button class="cbtn dis show" data-act="disconnect">Disconnect</button>` : `<button class="cbtn" data-act="server" data-id="${esc(s.id)}">Connect</button>`}
-        </div>`;
-          }
+          // Kept in name order: re-sorting as latencies arrive would shuffle rows under the cursor.
+          const ss = g.servers, lim = limits[g.cc] || 100;
+          h += `<div class="servers">${ss.slice(0, lim).map(s => serverRow(s, cur, false)).join("")}`;
           if (ss.length > lim) h += `<button class="more" data-act="more" data-cc="${esc(g.cc)}">Show ${ss.length - lim} more</button>`;
           h += `</div>`;
         }
       }
-      if (!gs.length) h = `<div class="empty">No servers match “${esc(q)}”.</div>`;
+      if (!gs.length && !fs.length) h = tab === "fav" && !q
+        ? `<div class="empty">No favourites yet.<br>Star a country or server (${ico("star")}) to keep it here.</div>`
+        : `<div class="empty">No servers match “${esc(q)}”.</div>`;
       const el = $("clist"), top = el.scrollTop; el.innerHTML = h; el.scrollTop = top;
       paintMap();
     }
@@ -1541,34 +1830,98 @@
         if (a === "disconnect") return disconnect();
         if (a === "server") return connect(b.dataset.id);
         if (a === "country") return connectCountry(b.dataset.cc);
-        if (a === "more") { limits[b.dataset.cc] = (limits[b.dataset.cc] || 40) + 60; return renderList(); }
+        if (a === "more") { limits[b.dataset.cc] = (limits[b.dataset.cc] || 100) + 200; return renderList(); }
+        if (a === "fav") return toggleFav(b.dataset.key);
       }
       const sr = e.target.closest(".srow"); if (sr) return connect(sr.dataset.id);
       const cr = e.target.closest(".crow"); if (cr) toggleCountry(cr.dataset.cc);
     });
     $("clist").addEventListener("keydown", e => { const cr = e.target.closest(".crow"); if (cr && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggleCountry(cr.dataset.cc); } });
 
+    const rowOf = cc => cc && document.querySelector(`.crow[data-cc="${CSS.escape(cc)}"]`);
+    const serversOf = cc => { const r = rowOf(cc); return r && r.nextElementSibling && r.nextElementSibling.classList.contains("servers") ? r.nextElementSibling : null; };
+    // Slide a server list between heights; `done` runs at the end.
+    function slide(el, open, done) {
+      const h = el.scrollHeight;
+      if (reduceMotion.matches || !h) { done && done(); return; }
+      el.classList.add("anim");
+      const a = el.animate(open ? [{ height: "0px", opacity: 0 }, { height: h + "px", opacity: 1 }] : [{ height: h + "px", opacity: 1 }, { height: "0px", opacity: 0 }],
+        { duration: Math.min(320, 160 + h / 8), easing: "cubic-bezier(.2,0,0,1)" });
+      const job = { a, finish() { if (!running.delete(job)) return; el.classList.remove("anim"); done && done(); } };
+      running.add(job);
+      a.onfinish = a.oncancel = () => { job.finish(); flushRender(); };
+    }
+    const flushRender = () => { if (!running.size && renderDeferred) { renderDeferred = false; renderList(); } };
+    // Jump any running animation to its end state, synchronously.
+    function settle() { for (const j of [...running]) { j.a.cancel(); j.finish(); } flushRender(); }
+
     function toggleCountry(cc, forceOpen) {
-      openCC = forceOpen || openCC !== cc ? cc : null;
-      renderList();
-      if (openCC) {
-        const row = document.querySelector(`.crow[data-cc="${CSS.escape(cc)}"]`);
-        if (row && forceOpen) row.scrollIntoView({ block: "start", behavior: "smooth" });
-        const g = groups(visibleServers()).find(g => g.cc === cc);
-        if (g && g.servers.some(s => !(s.id in lat))) measure(g.servers.slice(0, 80).map(s => s.id));
+      settle();
+      const prev = openCC, next = forceOpen || openCC !== cc ? cc : null;
+      if (prev === next && forceOpen) return scrollToCountry(cc);
+      const old = prev && serversOf(prev);
+      if (old && !next) { // closing: animate out, then drop it
+        old.previousElementSibling.classList.remove("open");
+        slide(old, false, () => { openCC = null; renderList(); });
+        return;
       }
+      // Switching countries. If the old list is above the tapped row, closing
+      // it would yank the row up, so scroll to keep the row under the finger.
+      const list = $("clist"), tapped = rowOf(cc), before = tapped && tapped.getBoundingClientRect().top;
+      const above = old && tapped && old.compareDocumentPosition(tapped) & Node.DOCUMENT_POSITION_FOLLOWING;
+      const ghost = old && !above && old.cloneNode(true);
+      openCC = next;
+      renderList();
+      const prevRow = rowOf(prev), now = rowOf(cc);
+      if (ghost && prevRow) { prevRow.after(ghost); slide(ghost, false, () => ghost.remove()); } // collapse a copy of the old list
+      if (above && now) {
+        list.scrollTop += now.getBoundingClientRect().top - before;
+        // Near the top there may not be enough to scroll; ease out what's left.
+        const rest = Math.round(before - now.getBoundingClientRect().top);
+        if (rest > 1 && prevRow) {
+          const pad = document.createElement("div"); pad.style.height = rest + "px";
+          prevRow.after(pad); slide(pad, false, () => pad.remove());
+        }
+      }
+      const el = serversOf(next);
+      if (el) {
+        const row = el.previousElementSibling; row.classList.remove("open"); row.offsetWidth; row.classList.add("open"); // let the chevron turn
+        slide(el, true);
+      }
+      if (!next) return;
+      setSheet(true);
+      if (forceOpen) scrollToCountry(cc);
+      const g = groups(visibleServers()).find(g => g.cc === cc);
+      if (g) measure(g.servers.map(s => s.id).filter(stale));
+    }
+    function scrollToCountry(cc) {
+      const row = document.querySelector(`.crow[data-cc="${CSS.escape(cc)}"]`);
+      if (row) row.scrollIntoView({ block: "start", behavior: reduceMotion.matches ? "auto" : "smooth" });
+    }
+
+    async function toggleFav(key) {
+      const on = !favs.has(key);
+      on ? favs.add(key) : favs.delete(key); favBusy++; renderList();
+      try { const r = await post("/api/favorites", { key, on }); S.state.favorites = r.favorites; }
+      catch (e) { toast(e.message); on ? favs.delete(key) : favs.add(key); }
+      finally { favBusy--; favChangedAt = Date.now(); renderList(); }
     }
 
     /* ---------------- latency & connecting ---------------- */
-    async function measure(ids) {
+    // force: measure even ids that another request is already measuring
+    // (callers that need the result, like Connect).
+    async function measure(ids, force) {
+      ids = [...new Set(ids)].filter(id => force || !pendingIds.has(id));
       if (!ids.length) return {};
+      ids.forEach(id => pendingIds.add(id)); inflight++; measuring(); renderList();
       try {
-        const r = await post("/api/ping", { ids });
-        for (const id of ids) lat[id] = r[id] ?? null;
-        renderList();
+        const r = await post("/api/ping", { ids }), now = Date.now();
+        for (const id of ids) { lat[id] = r[id] ?? null; latAt[id] = now; }
         return r;
       } catch (e) { toast(e.message); return {}; }
+      finally { ids.forEach(id => pendingIds.delete(id)); inflight--; measuring(); renderList(); }
     }
+    function measuring() { const b = $("measureAll"); b.disabled = inflight > 0; b.querySelector("span").textContent = inflight ? "Measuring…" : "Measure"; }
     const pickBest = (r, ids) => ids.filter(id => r[id] != null).sort((a, b) => r[a] - r[b])[0];
     function sample(arr, n) { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]]; } return a.slice(0, n); }
     const pfWanted = () => S && S.state.portForward;
@@ -1576,7 +1929,7 @@
     async function connect(id) {
       if (!S.state.key.set) { openSettings(); toast("Add a WireGuard key first"); return; }
       const s = servers.find(x => x.id === id) || S.state.server;
-      try { S = await post("/api/state", { serverId: id, enabled: true }); lastBytes = null; render(); toast(`Connecting to ${s ? s.name : id}…`); }
+      try { S = await post("/api/state", { serverId: id, enabled: true }); lastBytes = null; setSheet(false); render(); toast(`Connecting to ${s ? s.name : id}…`); }
       catch (e) { toast(e.message); }
     }
     async function withBusy(label, fn) {
@@ -1584,12 +1937,13 @@
       const q = $("quick"); q.disabled = true; q.querySelector("span").textContent = label;
       try { await fn(); } finally { busy = false; q.disabled = false; render(); }
     }
-    // Fastest server in a country (P2P preferred when port forwarding is on).
+    // Fastest server in a country (P2P only when port forwarding is on and the country has any).
     function connectCountry(cc) {
       return withBusy("Finding fastest…", async () => {
         let c = servers.filter(s => s.cc === cc && tabFilter(s));
         if (pfWanted() && tab !== "tor" && c.some(s => s.p2p)) c = c.filter(s => s.p2p);
-        const ids = sample(c, 80).map(s => s.id), r = await measure(ids), best = pickBest(r, ids);
+        // Every server, freshly: a whole country is ~1-2s even for the US.
+        const ids = c.map(s => s.id), r = await measure(ids, true), best = pickBest(r, ids);
         best ? await connect(best) : toast("No server in that country answered");
       });
     }
@@ -1598,13 +1952,14 @@
       return withBusy("Finding fastest…", async () => {
         let c = servers.filter(s => !s.secureCore && !s.tor && !s.free);
         if (pfWanted()) c = c.filter(s => s.p2p);
-        const byCC = groups(c);
-        const probe = byCC.map(g => sample(g.servers, 1)[0].id);
-        const r1 = await measure(probe);
-        const top = probe.filter(id => r1[id] != null).sort((a, b) => r1[a] - r1[b]).slice(0, 3).map(id => servers.find(s => s.id === id).cc);
+        const byCC = groups(c), ccOf = new Map(c.map(s => [s.id, s.cc]));
+        const probe = byCC.flatMap(g => sample(g.servers, 2).map(s => s.id));
+        const r1 = await measure(probe, true), best1 = new Map();
+        for (const id of probe) if (r1[id] != null && !(r1[id] >= best1.get(ccOf.get(id)))) best1.set(ccOf.get(id), r1[id]);
+        const top = [...best1].sort((a, b) => a[1] - b[1]).slice(0, 3).map(([cc]) => cc);
         if (!top.length) return toast("No server answered");
         const ids = sample(c.filter(s => top.includes(s.cc)), 90).map(s => s.id);
-        const r2 = await measure(ids), best = pickBest(r2, ids);
+        const r2 = await measure(ids, true), best = pickBest(r2, ids);
         if (best) await connect(best);
       });
     }
@@ -1617,10 +1972,11 @@
       quickConnect();
     };
     $("disconnect").onclick = disconnect;
+    // Two servers per country (one may not answer), plus the open country and starred servers.
     $("measureAll").onclick = async () => {
       const gs = groups(visibleServers());
-      toast(`Measuring ${gs.length} countries…`);
-      await measure(gs.map(g => sample(g.servers, 1)[0].id).slice(0, 200));
+      const ids = gs.flatMap(g => g.cc === openCC ? g.servers.map(s => s.id) : sample(g.servers, 2).map(s => s.id));
+      await measure([...ids, ...favServers().map(s => s.id)], true);
     };
 
     /* ---------------- map ---------------- */
@@ -1752,7 +2108,9 @@
         $("stIP").innerHTML = `${flagImg(cc)}<span>${esc([showInfo.city, (servers.find(x => x.cc === cc) || {}).country || cc].filter(Boolean).join(", "))}</span><span>·</span><span>IP <b class="num">${esc(showInfo.ip)}</b></span>`;
       } else if (cls === "connecting") $("stIP").textContent = srv ? `Connecting to ${srv.name}…` : "";
       else if (cls === "blocked") $("stIP").textContent = "Exit-node traffic is blocked until the tunnel recovers";
+      else if (cls === "connected" && s.exit && s.exit.error) $("stIP").textContent = "Couldn't look up the exit IP yet, retrying…";
       else $("stIP").textContent = phase === "connected" ? "Checking IP…" : "";
+      if (cls === "connected" && s.exit && s.exit.error) $("stIP").title = "Last lookup failed: " + s.exit.error; else $("stIP").removeAttribute("title");
 
       // card
       const on = st.enabled && srv;
@@ -1810,6 +2168,7 @@
       $("aUser").textContent = S.user || S.login || "—";
       $("aVer").textContent = S.version || "dev";
       paintMap();
+      layoutSheet();
     }
     function copyPort() { navigator.clipboard.writeText(String(S.status.pfPort)).then(() => toast("Port copied")); }
     $("pfCopy").onclick = copyPort;
@@ -1828,10 +2187,78 @@
     $("kRemove").onclick = async () => { if (!confirm("Remove the WireGuard key? The VPN will be turned off.")) return; try { S = await api("/api/key", { method: "DELETE" }); render(); } catch (e) { toast(e.message); } };
     $("refreshCat").onclick = async () => { try { await post("/api/catalog/refresh"); await loadServers(); refresh(); toast("Server list updated"); } catch (e) { toast(e.message); } };
 
+    /* ---------------- mobile bottom sheet ---------------- */
+    const sheet = $("side"), mobile = matchMedia("(max-width:900px)");
+    let sheetOpen = false, sheetPeek = 0, drag = null;
+    // Size the sheet to reach just under the navbar, and park it (collapsed)
+    // just under the connection card.
+    function layoutSheet() {
+      if (!mobile.matches) { sheet.style.height = sheet.style.transform = ""; return; }
+      if (drag && drag.active) return;
+      const top = $("top").getBoundingClientRect().bottom + 6, h = window.innerHeight - top;
+      sheet.style.height = h + "px";
+      sheetPeek = Math.round(Math.max(0, Math.min(h - 200, $("conn").getBoundingClientRect().bottom + 12 - top)));
+      placeSheet();
+    }
+    const placeSheet = y => { sheet.style.transform = `translateY(${y ?? (sheetOpen ? 0 : sheetPeek)}px)`; };
+    function setSheet(open) {
+      if (!mobile.matches) return;
+      sheetOpen = open; sheet.classList.toggle("expanded", open);
+      $("grab").setAttribute("aria-label", open ? "Collapse server list" : "Expand server list");
+      placeSheet();
+    }
+    $("grab").onclick = () => setSheet(!sheetOpen);
+    $("grab").onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSheet(!sheetOpen); } };
+    $("q").addEventListener("focus", () => setSheet(true));
+    // Collapsed, any drag on the sheet moves it. Open, the list scrolls and
+    // only moves the sheet when pulled down from its top.
+    sheet.addEventListener("touchstart", e => {
+      if (!mobile.matches || e.touches.length > 1) return;
+      const y = e.touches[0].clientY;
+      drag = { y0: y, last: y, lastT: e.timeStamp, v: 0, inList: !!e.target.closest("#clist"), skip: !!e.target.closest("input") };
+    }, { passive: true });
+    sheet.addEventListener("touchmove", e => {
+      if (!drag || drag.skip) return;
+      const y = e.touches[0].clientY;
+      if (!drag.active) {
+        const dy = y - drag.y0;
+        if (Math.abs(dy) < 6) return;
+        if (sheetOpen && drag.inList && !(dy > 0 && $("clist").scrollTop <= 0)) { drag.skip = true; return; }
+        drag.active = true; drag.y0 = y; sheet.classList.add("dragging");
+      }
+      e.preventDefault();
+      placeSheet(Math.min(sheetPeek, Math.max(0, (sheetOpen ? 0 : sheetPeek) + y - drag.y0)));
+      drag.v = (y - drag.last) / Math.max(1, e.timeStamp - drag.lastT); drag.last = y; drag.lastT = e.timeStamp;
+    }, { passive: false });
+    function endDrag() {
+      const d = drag; drag = null;
+      if (!d || !d.active) return;
+      sheet.classList.remove("dragging");
+      const pos = Math.min(sheetPeek, Math.max(0, (sheetOpen ? 0 : sheetPeek) + d.last - d.y0));
+      setSheet(d.v < -0.3 ? true : d.v > 0.3 ? false : pos < sheetPeek / 2);
+    }
+    sheet.addEventListener("touchend", endDrag);
+    sheet.addEventListener("touchcancel", endDrag);
+    window.addEventListener("resize", layoutSheet);
+    mobile.addEventListener("change", () => { setSheet(false); sheet.classList.remove("expanded"); layoutSheet(); });
+
     /* ---------------- tabs / search ---------------- */
-    function setTab(t) { tab = t; document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b.dataset.t === t)); renderList(); }
+    // Each tab keeps its own open country and scroll position, so switching
+    // away and back returns to exactly where you were.
+    const tabState = {};
+    function setTab(t) {
+      settle();
+      if (t === tab) return;
+      tabState[tab] = { open: openCC, scroll: $("clist").scrollTop };
+      const saved = tabState[t];
+      tab = t; document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b.dataset.t === t));
+      if (saved) openCC = saved.open;
+      renderList();
+      $("clist").scrollTop = saved ? saved.scroll : 0;
+      if (t === "fav") measure(favServers().map(s => s.id).filter(stale));
+    }
     $("tabs").onclick = e => { const b = e.target.closest(".tab"); if (b) setTab(b.dataset.t); };
-    $("q").oninput = () => renderList();
+    $("q").oninput = () => { settle(); renderList(); };
 
     /* ---------------- boot ---------------- */
     async function loadServers() { servers = await api("/api/servers"); if (!mapBuilt) buildMap(); renderList(); }
@@ -1839,20 +2266,29 @@
     setInterval(() => {
       if (S && S.state.enabled && S.status.phase === "connected" && !document.hidden) $("csTime").textContent = dur(S.status.since);
     }, 1000);
-    async function refresh() { try { S = await api("/api/status"); if (S.now) clockOffset = Date.parse(S.now) - Date.now(); render(); } catch (e) { $("stLabel").textContent = "DASHBOARD OFFLINE"; $("stIP").textContent = e.message; } }
+    async function refresh() {
+      try {
+        const t0 = Date.now();
+        S = await api("/api/status"); if (S.now) clockOffset = Date.parse(S.now) - Date.now();
+        // A status fetched while a star was being toggled may predate it.
+        if (!favBusy && t0 > favChangedAt) favs = new Set(S.state.favorites || []);
+        render();
+      } catch (e) { $("stLabel").textContent = "DASHBOARD OFFLINE"; $("stIP").textContent = e.message; }
+    }
     let pollT;
     function schedule() { clearTimeout(pollT); pollT = setTimeout(async () => { if (!document.hidden) { await refresh(); if (S) renderListIfConnChanged(); } schedule(); }, 2000); }
     let lastConnKey = "";
-    function renderListIfConnChanged() { const k = `${S.state.enabled}|${S.state.server && S.state.server.id}`; if (k !== lastConnKey) { lastConnKey = k; renderList(); } }
+    const listKey = () => `${S.state.enabled}|${S.state.server && S.state.server.id}|${[...favs]}`;
+    function renderListIfConnChanged() { const k = listKey(); if (k !== lastConnKey) { lastConnKey = k; renderList(); } }
     document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
     (async () => {
       await refresh();
       await loadServers();
       if (S) {
-        lastConnKey = `${S.state.enabled}|${S.state.server && S.state.server.id}`; if (S.state.server && S.state.enabled) openCC = S.state.server.cc; renderList(); render();
+        lastConnKey = listKey(); if (S.state.server && S.state.enabled) openCC = S.state.server.cc; renderList(); render();
         const row = openCC && document.querySelector(`.crow[data-cc="${CSS.escape(openCC)}"]`);
-        if (row && matchMedia("(min-width: 901px)").matches) $("clist").scrollTop = row.offsetTop - $("clist").offsetTop - 8;
-        if (openCC) measure(servers.filter(x => x.cc === openCC && tabFilter(x)).slice(0, 80).map(x => x.id));
+        if (row) $("clist").scrollTop = row.offsetTop - $("clist").offsetTop - 8;
+        if (openCC) measure(servers.filter(x => x.cc === openCC && tabFilter(x)).map(x => x.id));
       }
       if (location.hash === "#settings") openSettings();
       schedule();

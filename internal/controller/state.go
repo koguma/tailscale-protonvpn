@@ -24,6 +24,9 @@ type State struct {
 	PFTargetPort int     `json:"pfTargetPort"` // 0 = same as the public port
 	Server       *Server `json:"server,omitempty"`
 	Key          *WGKey  `json:"key,omitempty"`
+	// Favorites are starred countries ("cc:JP") and servers ("srv:JP#367").
+	// Servers go by name, which survives server-list refreshes; IPs may not.
+	Favorites []string `json:"favorites,omitempty"`
 }
 
 // WGKey is the [Interface] half of a ProtonVPN WireGuard  Proton keys

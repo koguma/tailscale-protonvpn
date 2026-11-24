@@ -3,6 +3,7 @@ package controller
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -102,7 +103,7 @@ func TestStoreRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st != DefaultState() {
+	if !reflect.DeepEqual(st, DefaultState()) {
 		t.Errorf("missing file should give defaults, got %+v", st)
 	}
 	if !st.KillSwitch || !st.DNSViaVPN || !st.PortForward || st.Enabled {

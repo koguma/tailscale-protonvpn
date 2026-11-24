@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/netip"
 	"os"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -125,20 +126,28 @@ func (c *Controller) Status() Status {
 
 // Update applies fn to the state, persists it and reconciles immediately.
 func (c *Controller) Update(fn func(*State) error) error {
+	if err := c.Patch(fn); err != nil {
+		return err
+	}
+	c.Reconcile()
+	poke(c.kickPF)
+	return nil
+}
+
+// Patch applies fn to the state and persists it without touching the
+// network, for settings that only the dashboard uses.
+func (c *Controller) Patch(fn func(*State) error) error {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	next := c.st
+	next.Favorites = slices.Clone(next.Favorites) // fn may append in place
 	if err := fn(&next); err != nil {
-		c.mu.Unlock()
 		return err
 	}
 	if err := c.store.Save(next); err != nil {
-		c.mu.Unlock()
 		return fmt.Errorf("save state: %w", err)
 	}
 	c.st = next
-	c.mu.Unlock()
-	c.Reconcile()
-	poke(c.kickPF)
 	return nil
 }
 
